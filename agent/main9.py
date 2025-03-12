@@ -62,6 +62,7 @@ class ReadPageOutput(BaseModel):
     content: str
 
 def read_page(input: ReadPageInput) -> ReadPageOutput:
+    print(f"Reading page from {input.url}")
     actual_path = path_manager.resolve_path(input.url)
     try:
         with open(actual_path, "r", encoding="utf-8") as f:
@@ -79,6 +80,7 @@ class WritePageOutput(BaseModel):
     message: Optional[str] = None
 
 def write_page(input: WritePageInput) -> WritePageOutput:
+    print(f"Writing page to {input.url}")
     actual_path = path_manager.resolve_path(input.url)
     os.makedirs(os.path.dirname(actual_path), exist_ok=True)
     with open(actual_path, "w", encoding="utf-8") as f:
@@ -89,6 +91,7 @@ class ListPagesOutput(BaseModel):
     pages: List[str]  # List of virtual URLs
 
 def list_all_pages() -> ListPagesOutput:
+    print("List all pages called")
     if not path_manager.project_path:
         raise ValueError("Project path not set")
         
@@ -113,6 +116,7 @@ class WriteCypressTestsOutput(BaseModel):
     message: Optional[str] = None
 
 def write_cypress_tests(input: WriteCypressTestsInput) -> WriteCypressTestsOutput:
+    print("Writing Cypress tests")
     if not path_manager.project_path:
         raise ValueError("Project path not set")
         
@@ -126,6 +130,7 @@ class ReadCypressTestsOutput(BaseModel):
     content: str
 
 def read_cypress_tests() -> ReadCypressTestsOutput:
+    print("Reading Cypress tests")
     if not path_manager.project_path:
         raise ValueError("Project path not set")
         
