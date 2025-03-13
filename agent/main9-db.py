@@ -10,7 +10,358 @@ from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.providers.openai import OpenAIProvider
 from dotenv import load_dotenv; load_dotenv()
 
-import database
+
+# =======================
+# Data Models for SQLite Tool
+# =======================
+
+class SetupSQLiteInput(BaseModel):
+    """Input for setting up SQLite database"""
+    schema_content: str  # SQL schema content
+    include_auth: bool = True
+    include_session: bool = True
+    database_name: str = "blog.db"
+
+class SetupSQLiteOutput(BaseModel):
+    """Output for setting up SQLite database"""
+    success: bool
+    message: Optional[str] = None
+    created_files: List[str] = []
+
+def setup_sqlite_database(input: SetupSQLiteInput) -> SetupSQLiteOutput:
+    """
+    Sets up SQLite database in the Next.js project.
+    
+    Args:
+        input: Configuration for SQLite setup
+        
+    Returns:
+        SetupSQLiteOutput with success status and created files
+    """
+    if not path_manager.project_path:
+        return SetupSQLiteOutput(
+            success=False,
+            message="Project path not set. Call set_project_path first."
+        )
+    
+    created_files = []
+    
+    try:
+        # Step 1: Create db directory and schema file
+        db_dir = os.path.join(path_manager.project_path, "db")
+        os.makedirs(db_dir, exist_ok=True)
+        
+        schema_path = os.path.join(db_dir, "schema.sql")
+        with open(schema_path, "w", encoding="utf-8") as f:
+            f.write(input.schema_content)
+        created_files.append("/db/schema.sql")
+        
+        # Step 2: Create data directory for database file
+        data_dir = os.path.join(path_manager.project_path, "data")
+        os.makedirs(data_dir, exist_ok=True)
+        
+        # Step 3: Add SQLite dependencies to package.json
+        package_json_path = os.path.join(path_manager.project_path, "package.json")
+        try:
+            with open(package_json_path, "r", encoding="utf-8") as f:
+                package_data = json.load(f)
+                
+            # Required dependencies
+            dependencies = {
+                "better-sqlite3": "^8.6.0"
+            }
+            
+            # Optional dependencies
+            if input.include_auth:
+                dependencies.update({
+                    "bcryptjs": "^2.4.3"
+                })
+            
+            if input.include_session:
+                dependencies.update({
+                    "iron-session": "^6.3.1"
+                })
+            
+            # Update dependencies
+            if "dependencies" not in package_data:
+                package_data["dependencies"] = {}
+            
+            package_data["dependencies"].update(dependencies)
+            
+            with open(package_json_path, "w", encoding="utf-8") as f:
+                json.dump(package_data, f, indent=2)
+        except (FileNotFoundError, json.JSONDecodeError):
+            return SetupSQLiteOutput(
+                success=False,
+                message="package.json not found or invalid. Please ensure a valid package.json exists in the project root.",
+                created_files=created_files
+            )
+        
+        # Step 4: Create database library files
+        lib_dir = os.path.join(path_manager.project_path, "lib")
+        os.makedirs(lib_dir, exist_ok=True)
+        
+        # Create db.js - main database connection file
+        db_js_content = f"""// SQLite database connection using better-sqlite3
+import Database from 'better-sqlite3';
+import path from 'path';
+import fs from 'fs';
+
+// Ensure the data directory exists
+const dataDir = path.join(process.cwd(), 'data');
+if (!fs.existsSync(dataDir)) {{
+  fs.mkdirSync(dataDir, {{ recursive: true }});
+}}
+
+// Database file path
+const dbPath = path.join(dataDir, '{input.database_name}');
+
+// Create and initialize the database
+let db;
+
+try {{
+  db = new Database(dbPath);
+  
+  // Enable foreign keys
+  db.pragma('foreign_keys = ON');
+  
+  // For development: check if we need to initialize the database
+  const tableExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='posts'").get();
+  
+  if (!tableExists) {{
+    // Read and execute the schema file
+    const schemaPath = path.join(process.cwd(), 'db', 'schema.sql');
+    const schema = fs.readFileSync(schemaPath, 'utf8');
+    
+    // Split by semicolon to execute each statement separately
+    schema.split(';').forEach(statement => {{
+      if (statement.trim()) {{
+        db.prepare(statement).run();
+      }}
+    }});
+    
+    console.log('Database initialized with schema');
+  }}
+}} catch (error) {{
+  console.error('Database initialization error:', error);
+}}
+
+// Export the database instance
+export default db;
+"""
+        
+        db_js_path = os.path.join(lib_dir, "db.js")
+        with open(db_js_path, "w", encoding="utf-8") as f:
+            f.write(db_js_content)
+        created_files.append("/lib/db.js")
+        
+        # Create db-queries.js - reusable queries
+        queries_js_content = """// Database queries and utility functions
+import db from './db';
+"""
+
+        # Add authentication related queries if needed
+        if input.include_auth:
+            queries_js_content += """
+import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
+
+// User-related queries
+export const userQueries = {
+  // Create a new user
+  createUser: db.prepare(`
+    INSERT INTO users (username, email, password, name, bio, avatar_url)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `),
+  
+  // Get user by ID
+  getUserById: db.prepare(`
+    SELECT id, username, email, name, bio, avatar_url, is_admin, created_at, updated_at
+    FROM users WHERE id = ?
+  `),
+  
+  // Get user by email (for login)
+  getUserByEmail: db.prepare(`
+    SELECT id, username, email, password, name, bio, avatar_url, is_admin, created_at, updated_at
+    FROM users WHERE email = ?
+  `)
+};
+
+// Helper functions for auth
+export function hashPassword(password) {
+  return bcrypt.hashSync(password, 10);
+}
+
+export function verifyPassword(password, hashedPassword) {
+  return bcrypt.compareSync(password, hashedPassword);
+}
+
+export function generateToken() {
+  return crypto.randomBytes(32).toString('hex');
+}
+"""
+
+        # Add session related code if needed
+        if input.include_session:
+            # Also create session.js
+            session_js_content = """// Iron session configuration
+import { withIronSessionApiRoute, withIronSessionSsr } from 'iron-session/next';
+
+const sessionOptions = {
+  password: process.env.SESSION_PASSWORD || 'complex_password_at_least_32_characters_long',
+  cookieName: 'blog_session',
+  cookieOptions: {
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 60 * 60 * 24 * 7, // 1 week
+  },
+};
+
+export function withSessionRoute(handler) {
+  return withIronSessionApiRoute(handler, sessionOptions);
+}
+
+export function withSessionSsr(handler) {
+  return withIronSessionSsr(handler, sessionOptions);
+}
+"""
+            session_js_path = os.path.join(lib_dir, "session.js")
+            with open(session_js_path, "w", encoding="utf-8") as f:
+                f.write(session_js_content)
+            created_files.append("/lib/session.js")
+
+        # Add content query functions
+        queries_js_content += """
+// Post-related queries
+export const postQueries = {
+  // Create a new post
+  createPost: db.prepare(`
+    INSERT INTO posts (title, content, summary, slug, published, featured_image, author_id, category_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `),
+  
+  // Get all published posts
+  getAllPublishedPosts: db.prepare(`
+    SELECT p.*, 
+           u.username as author_username, u.name as author_name, u.avatar_url as author_avatar,
+           c.name as category_name, c.slug as category_slug,
+           (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comment_count,
+           (SELECT COUNT(*) FROM likes WHERE post_id = p.id) as like_count
+    FROM posts p
+    JOIN users u ON p.author_id = u.id
+    LEFT JOIN categories c ON p.category_id = c.id
+    WHERE p.published = 1
+    ORDER BY p.created_at DESC
+    LIMIT ? OFFSET ?
+  `),
+  
+  // Get total count of published posts
+  getPublishedPostCount: db.prepare(`
+    SELECT COUNT(*) as count FROM posts WHERE published = 1
+  `),
+  
+  // Get published post by slug
+  getPostBySlug: db.prepare(`
+    SELECT p.*, 
+           u.username as author_username, u.name as author_name, u.avatar_url as author_avatar,
+           c.name as category_name, c.slug as category_slug,
+           (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comment_count,
+           (SELECT COUNT(*) FROM likes WHERE post_id = p.id) as like_count
+    FROM posts p
+    JOIN users u ON p.author_id = u.id
+    LEFT JOIN categories c ON p.category_id = c.id
+    WHERE p.slug = ? AND (p.published = 1 OR p.author_id = ?)
+  `)
+};
+
+// Helper functions
+export function createSlug(title) {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+"""
+        
+        queries_js_path = os.path.join(lib_dir, "db-queries.js")
+        with open(queries_js_path, "w", encoding="utf-8") as f:
+            f.write(queries_js_content)
+        created_files.append("/lib/db-queries.js")
+        
+        # Create basic API route for posts
+        api_dir = os.path.join(path_manager.project_path, "pages", "api")
+        posts_dir = os.path.join(api_dir, "posts")
+        os.makedirs(posts_dir, exist_ok=True)
+        
+        posts_index_content = """// API route for posts
+import db from '../../../lib/db';
+import { postQueries, createSlug } from '../../../lib/db-queries';
+
+export default function handler(req, res) {
+  // GET: Fetch posts with pagination
+  if (req.method === 'GET') {
+    const { page = 1, limit = 10 } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    
+    try {
+      const posts = postQueries.getAllPublishedPosts.all(limit, offset);
+      
+      // Get total count for pagination
+      const totalCount = postQueries.getPublishedPostCount.get().count;
+      
+      return res.status(200).json({
+        posts,
+        pagination: {
+          total: totalCount,
+          page: parseInt(page),
+          pageSize: parseInt(limit),
+          totalPages: Math.ceil(totalCount / parseInt(limit))
+        }
+      });
+    } catch (error) {
+      console.error('Error fetching posts:', error);
+      return res.status(500).json({ error: 'Failed to fetch posts' });
+    }
+  }
+  
+  // Method not allowed
+  res.setHeader('Allow', ['GET']);
+  return res.status(405).json({ error: `Method ${req.method} not allowed` });
+}
+"""
+        
+        posts_index_path = os.path.join(posts_dir, "index.js")
+        with open(posts_index_path, "w", encoding="utf-8") as f:
+            f.write(posts_index_content)
+        created_files.append("/pages/api/posts/index.js")
+        
+        # Create .env.local with database configuration
+        env_local_content = """# Database Configuration
+DATABASE_PATH=./data/blog.db
+SESSION_PASSWORD=complex_password_at_least_32_characters_long
+"""
+        env_local_path = os.path.join(path_manager.project_path, ".env.local")
+        with open(env_local_path, "w", encoding="utf-8") as f:
+            f.write(env_local_content)
+        created_files.append("/.env.local")
+        
+        return SetupSQLiteOutput(
+            success=True,
+            message="SQLite successfully set up in the Next.js project",
+            created_files=created_files
+        )
+    except Exception as e:
+        return SetupSQLiteOutput(
+            success=False,
+            message=f"Failed to set up SQLite: {str(e)}",
+            created_files=created_files
+        )
+
+
+
+
+
+
+
 
 # =======================
 # Path Abstraction Helper
@@ -153,7 +504,8 @@ DEFAULT_USAGE_LIMITS = UsageLimits(request_limit=100, total_tokens_limit=1000000
 
 # Initialize the model (adjust as needed for your environment)
 ai_model = OpenAIModel(
-    model_name='gpt-4o-mini'
+    model_name='deepseek-chat', 
+    provider=OpenAIProvider(base_url='https://api.deepseek.com')
 )
 
 # =======================
@@ -224,6 +576,47 @@ cypress_tests_agent = Agent(
         "Ensure the tests cover critical functionalities and adhere to best practices."
     )
 )
+
+
+
+
+
+
+@code_generation_agent.tool
+async def setup_sqlite_tool(ctx: RunContext[Dict[str, Any]], schema_content: str, 
+                           include_auth: bool = True, include_session: bool = True,
+                           database_name: str = "blog.db") -> str:
+    """
+    Set up a SQLite database in the Next.js project.
+    
+    Args:
+        schema_content: The SQL schema content to initialize the database with tables
+        include_auth: Whether to include authentication features (default: True)
+        include_session: Whether to include session management (default: True)
+        database_name: Name of the SQLite database file (default: "blog.db")
+        
+    Returns:
+        A message describing the result of the setup process with a list of created files
+    """
+    # Create input model
+    input_config = SetupSQLiteInput(
+        schema_content=schema_content,
+        include_auth=include_auth,
+        include_session=include_session,
+        database_name=database_name
+    )
+    
+    # Call the function to set up SQLite
+    result = setup_sqlite_database(input_config)
+    
+    if result.success:
+        files_created = "\n- " + "\n- ".join(result.created_files)
+        return f"SQLite database set up successfully. Created files: {files_created}"
+    else:
+        return f"Failed to set up SQLite database: {result.message}"
+
+
+
 
 # Add tools to the cypress tests agent
 @cypress_tests_agent.tool
