@@ -1,153 +1,189 @@
-from pydantic_ai import Agent, RunContext
-from pydantic_ai.usage import UsageLimits
-from typing import Dict, List, Any, Optional
+import subprocess
+import os
+from pydantic import BaseModel
+from typing import List, Dict, Optional, Literal, Any
 import json
-from pydantic_ai.providers.openai import OpenAIProvider
+import asyncio
+from pydantic_ai import Agent, RunContext
+from pydantic_ai.usage import UsageLimits, Usage
 from pydantic_ai.models.openai import OpenAIModel
-
 from dotenv import load_dotenv; load_dotenv()
 
+# Import our utility functions
+from utils.nextjs_project import create_base_nextjs_project
+from utils.cypress_runner import run_cypress_tests
+
+# Import agents
+from agents import code_generation, cypress_tests, feedback, FeedbackOutput
+from agents.context import CodeGenerationDeps
+
+
+# =======================
+# Define AI Model and Usage Limits
+# =======================
+
 # Define a common usage limit for all agents
-DEFAULT_USAGE_LIMITS = UsageLimits(request_limit=10, total_tokens_limit=5000)
+DEFAULT_USAGE_LIMITS = UsageLimits(request_limit=100, total_tokens_limit=1000000)
 
-ollama_model = OpenAIModel(
-    model_name='llama3.2', provider=OpenAIProvider(base_url='http://localhost:11434/v1')
+# Initialize the model (adjust as needed for your environment)
+ai_model = OpenAIModel(
+    model_name='gpt-4o-mini'
 )
 
-# Requirements Analysis Agent
-requirements_agent = Agent(
-    ollama_model,
-    system_prompt=(
-        'You are a requirements analysis expert. Given a user request, you generate detailed '
-        'software specifications including functional requirements, non-functional requirements, '
-        'and acceptance criteria. Be thorough yet concise.'
-    ),
-#    result_type=Dict[str, Any]
-)
+# =======================
+# Simplified development flow with direct agent invocation using the tools
+# =======================
 
-# Code Generation Agent
-code_generation_agent = Agent(
-    ollama_model,
-    system_prompt=(
-        'You are a code generation expert. Given software specifications, you write clean, '
-        'efficient code that meets those requirements. Your code is well-structured, properly '
-        'commented, and follows best practices for the chosen programming language.'
-    ),
- #   result_type=Dict[str, str]
-)
-
-
-
-# Project Coordination Agent
-coordinator_agent = Agent(
-    ollama_model,
-    system_prompt=(
-        'You are the lead software architect coordinating the development process. You delegate tasks '
-        'to specialized agents, synthesize their outputs, and ensure the final product meets all requirements. '
-        'You make final decisions about architecture and implementation approaches.'
+async def generate_code_with_tools(project_description: str, project_path: str, deps: CodeGenerationDeps, feedback: Optional[str] = None) -> None:
+    """Generate code for the Next.js application using the code generation agent with tools"""
+    print("Generating code...")
+    
+    # Prepare input for the code generation agent
+    input_data = {
+        "project_description": project_description,
+        "feedback": feedback,
+        "project_path": project_path
+    }
+    
+    # Call code generation agent - instead of returning files, it will use tools to write them
+    await code_generation.run(
+        json.dumps(input_data),
+        usage_limits=DEFAULT_USAGE_LIMITS,
+        model=ai_model,
+        deps=deps
     )
-)
+    
+    print(f"Code generation completed, files written to project")
 
-review_agent = Agent(
-    ollama_model,
-    system_prompt=(
-        'You are a code review expert. You analyze code for bugs, readability, efficiency, '
-        'and adherence to best practices. You provide specific, actionable feedback to improve code quality.'
-    ),
-    result_type=bool
-)
-
-
-# Tools for the coordinator agent
-@coordinator_agent.tool
-async def analyze_requirements(ctx: RunContext[None], user_request: str) -> Dict[str, Any]:
-    """
-    Analyze user requirements and generate detailed software specifications.
-    """
-    result = await requirements_agent.run(
-        f"Analyze the following user request and generate detailed software specifications:\n\n{user_request}",
-        usage=ctx.usage
+async def generate_cypress_tests_with_tools(project_path: str, deps: CodeGenerationDeps) -> None:
+    """Generate Cypress tests for the application using the cypress tests agent with tools"""
+    print("Generating Cypress tests...")
+    
+    # Call cypress tests agent - it will use tools to read pages and write tests
+    await cypress_tests.run(
+        json.dumps({
+            "action": "generate_tests",
+            "project_path": project_path
+        }),
+        usage_limits=DEFAULT_USAGE_LIMITS,
+        model=ai_model,
+        deps=deps
     )
+    
+    print("Cypress tests generation completed")
+
+async def get_feedback(test_output: str, test_errors: List[str], deps: CodeGenerationDeps) -> FeedbackOutput:
+    """Get feedback based on test results"""
+    print("Getting feedback on test results...")
+    
+    # Prepare input for the feedback agent
+    input_data = {
+        "test_output": test_output,
+        "test_errors": test_errors
+    }
+    
+    # Call feedback agent
+    result = await feedback.run(
+        json.dumps(input_data),
+        usage_limits=DEFAULT_USAGE_LIMITS,
+        model=ai_model,
+        deps=deps
+    )
+    
     return result.data
 
-
-@coordinator_agent.tool
-async def generate_code(ctx: RunContext[None], specifications: Dict[str, Any], language: str) -> Dict[str, str]:
+async def full_development_flow(project_description: str, max_iterations: int = 3):
     """
-    Generate code based on software specifications.
-    """
-    specs_str = json.dumps(specifications, indent=2)
-    result = await code_generation_agent.run(
-        f"Generate {language} code based on these specifications:\n\n{specs_str}",
-        usage=ctx.usage
-    )
-    return result.data
-
-
-@coordinator_agent.tool
-async def review_code(ctx: RunContext[None], code: Dict[str, str]) -> List[Dict[str, Any]]:
-    """
-    Review generated code and provide feedback.
-    """
-    code_str = json.dumps(code, indent=2)
-    result = await review_agent.run(
-        f"Review the following code and provide detailed feedback:\n\n{code_str}",
-        usage=ctx.usage
-    )
-    return result.data
-
-
-
-
-async def develop_software(user_request: str, language: str = "Python") -> Dict[str, Any]:
-    """
-    Main function to coordinate the software development process using multiple agents.
+    Orchestrates the development process using direct sequential agent invocation with tools.
     
     Args:
-        user_request: The user's software requirements or feature request
-        language: The programming language to use for implementation
-        
-    Returns:
-        A dictionary containing the full software development artifacts
-    """
+        project_description: Description of the project to build
+        max_iterations: Maximum number of development iterations
     
-    while True:
+    Returns:
+        Dictionary with development results
+    """
+    print("Starting development process...")
+    
+    # Step 1: Create base project structure
+    project_path = os.path.join(os.getcwd(), "nextjs-project")
+    create_base_nextjs_project(project_path)
+    print(f"Created base Next.js project at {project_path}")
+    print(project_path)
+    
+    # Create a usage tracker for token usage
+    usage = Usage()
 
-        # Analyze user requirements
-        requirements_result = await 
-
-        result = await coordinator_agent.run(
-            f"Develop software based on this request using {language}: {user_request}",
-            usage_limits=DEFAULT_USAGE_LIMITS
+    deps = CodeGenerationDeps(project_path=project_path, project_description=project_description)
+    
+    # Store development artifacts
+    feedback_result = None
+    
+    # Main development loop
+    for iteration in range(1, max_iterations + 1):
+        print(f"\n--- Iteration {iteration}/{max_iterations} ---")
+        
+        # Step 2: Generate or update code based on feedback
+        await generate_code_with_tools(
+            project_description,
+            project_path,
+            deps,
+            feedback_result.feedback_message if feedback_result else None
         )
-
-
-        # review all requirements
-
+        print(f"Generated code in iteration {iteration}")
+        
+        # Step 3: Generate Cypress tests
+        await generate_cypress_tests_with_tools(project_path, deps)
+        print("Generated Cypress tests")
+        
+        # Step 4: Run tests with enhanced functionality that:
+        # - Installs npm packages
+        # - Starts the Next.js server
+        # - Runs the Cypress tests
+        # - Stops the server
+        test_result = run_cypress_tests(project_path)
+        print(f"Tests ran with success={test_result['success']}")
+        
+        # If tests pass, we're done
+        if test_result['success']:
+            print("Tests passed successfully!")
+            break
+        
+        # If tests fail, get feedback for next iteration
+        feedback_result = await get_feedback(test_result['output'], test_result['errors'], deps)
+        print(f"Feedback: {feedback_result.feedback_message}")
+        if hasattr(feedback_result, 'suggestions'):
+            print(f"Suggestions: {feedback_result.suggestions}")
+        
+        # If this was the last iteration, we're done even if tests failed
+        if iteration == max_iterations:
+            print(f"Reached maximum iterations ({max_iterations})")
+    
+    # Return development results
     return {
-        "summary": result.data,
-        "usage_stats": result.usage()
+        "final_project_path": project_path,
+        "tests_passed": test_result['success'] if 'test_result' in locals() else False,
+        "iterations_completed": iteration
     }
-
 
 # Example usage
 if __name__ == "__main__":
-    import asyncio
-    
-    # Example user request
-    user_request = """
-    Create a web API for a task management system with the following features:
-    1. Users can create, read, update, and delete tasks
-    2. Tasks have a title, description, due date, priority, and status
-    3. Users can filter and sort tasks by various criteria
-    4. The system should validate inputs and handle errors gracefully
+    # Example project description
+    project_description = """
+    Create a basic Next.js application that displays a list of blog posts. 
+    Each post should have a title, author, date, and content. 
+    Users should be able to click on a post to view its full content.
+    The application should have a clean, responsive design using Tailwind CSS.
+    It should be nice-looking.
     """
     
-    # Run the development process
-    result = asyncio.run(develop_software(user_request))
+    # Run the development process with direct agent invocation using tools
+    result = asyncio.run(full_development_flow(project_description))
     
-    # Print the result
-    print("Development Summary:")
-    print(result["summary"])
-    print("\nUsage Statistics:")
-    print(result["usage_stats"])
+    print(f"Development completed after {result['iterations_completed']} iterations")
+    print(f"Tests passed: {result['tests_passed']}")
+    print(f"Next.js project created at: {result['final_project_path']}")
+    print("\nTo run the application:")
+    print(f"cd {result['final_project_path']}")
+    print("npm install")
+    print("npm run dev")
