@@ -151,8 +151,7 @@ DEFAULT_USAGE_LIMITS = UsageLimits(request_limit=100, total_tokens_limit=1000000
 
 # Initialize the model (adjust as needed for your environment)
 ai_model = OpenAIModel(
-    model_name='deepseek-chat', 
-    provider=OpenAIProvider(base_url='https://api.deepseek.com')
+    model_name='gpt-4o-mini'
 )
 
 # =======================
