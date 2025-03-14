@@ -11,73 +11,211 @@ from pydantic_ai.providers.openai import OpenAIProvider
 from dotenv import load_dotenv; load_dotenv()
 
 
+
+
+
 # =======================
-# Data Models for SQLite Tool
+# Data Models for SQLite Agent
 # =======================
 
-class SetupSQLiteInput(BaseModel):
-    """Input for setting up SQLite database"""
-    schema_content: str  # SQL schema content
+class SQLiteConfigInput(BaseModel):
+    """Input configuration for SQLite agent"""
+    app_description: str  # Description of the app to create a database for
+    existing_files: Optional[List[str]] = None  # List of existing file paths to analyze
+    file_contents: Optional[Dict[str, str]] = None  # Contents of files to analyze
     include_auth: bool = True
     include_session: bool = True
-    database_name: str = "blog.db"
+    database_name: str = "app.db"
 
-class SetupSQLiteOutput(BaseModel):
-    """Output for setting up SQLite database"""
+class SQLiteConfigOutput(BaseModel):
+    """Output from SQLite agent"""
+    schema_content: str  # SQL schema for the database
+    db_utils_content: str  # Content for db-queries.js
+    created_files: List[str]  # List of files created
+    api_routes: Dict[str, str]  # API routes for database interaction
+
+# =======================
+# SQLite Agent Definition
+# =======================
+
+def create_sqlite_agent(ai_model):
+    """Creates an agent specialized in designing and implementing SQLite databases for Next.js"""
+    
+    sqlite_agent = Agent(
+        ai_model,
+        deps_type=SQLiteConfigInput,
+        result_type=SQLiteConfigOutput,
+        system_prompt=(
+            "You are an expert in designing and implementing SQLite databases for Next.js applications. "
+            "Based on an application description and optional existing files, you will create an appropriate "
+            "database schema and implementation for a Next.js project.\n\n"
+            
+            "Your task is to:\n"
+            "1. Analyze the application description and understand what data needs to be stored\n"
+            "2. Design an appropriate SQLite database schema with tables, relationships, and indices\n"
+            "3. Create utility files for database access including queries and helper functions\n"
+            "4. Design API routes for interacting with the database\n\n"
+            
+            "Your output should include:\n"
+            "- A complete SQL schema file with tables, indices, triggers and sample data\n"
+            "- Database utility code for the application\n"
+            "- A list of files to be created\n"
+            "- Content for API routes\n\n"
+            
+            "You may be provided information about existing files to help align your database design "
+            "with the application structure and requirements. Use this information to tailor your database "
+            "design appropriately."
+        )
+    )
+    
+    # Add tools for the SQLite agent to analyze files and structure
+    @sqlite_agent.tool
+    async def read_file_content(ctx: RunContext[SQLiteConfigInput], file_path: str) -> str:
+        """
+        Read the content of a file in the project.
+        
+        Args:
+            file_path: Path to the file to read
+            
+        Returns:
+            Content of the file, or empty string if not found/provided
+        """
+        if ctx.deps.file_contents and file_path in ctx.deps.file_contents:
+            return ctx.deps.file_contents[file_path]
+        return ""
+    
+    @sqlite_agent.tool
+    async def list_available_files(ctx: RunContext[SQLiteConfigInput]) -> List[str]:
+        """
+        List all available files that can be analyzed.
+        
+        Returns:
+            List of file paths that can be read
+        """
+        if ctx.deps.existing_files:
+            return ctx.deps.existing_files
+        return []
+    
+    return sqlite_agent
+
+# =======================
+# Tool for the Code Generation Agent to call the SQLite Agent
+# =======================
+
+class GenerateSQLiteDBInput(BaseModel):
+    """Input for generating a SQLite database through the agent"""
+    app_description: str
+    existing_files: Optional[List[str]] = None
+    file_contents: Optional[Dict[str, str]] = None
+    include_auth: bool = True
+    include_session: bool = True
+    database_name: str = "app.db"
+
+class GenerateSQLiteDBOutput(BaseModel):
+    """Output from generating a SQLite database"""
     success: bool
-    message: Optional[str] = None
+    message: str
     created_files: List[str] = []
 
-def setup_sqlite_database(input: SetupSQLiteInput) -> SetupSQLiteOutput:
+async def generate_sqlite_database(
+    sqlite_agent: Agent,
+    input_config: GenerateSQLiteDBInput,
+    path_manager: Any,
+    usage_limits: Optional[UsageLimits] = None
+) -> GenerateSQLiteDBOutput:
     """
-    Sets up SQLite database in the Next.js project.
+    Uses the SQLite agent to generate a database for the Next.js application.
     
     Args:
-        input: Configuration for SQLite setup
+        sqlite_agent: The agent specialized in SQLite database design
+        input_config: Configuration input for database generation
+        path_manager: The path manager for resolving file paths
+        usage_limits: Optional usage limits for the agent
         
     Returns:
-        SetupSQLiteOutput with success status and created files
+        Result of database generation
     """
     if not path_manager.project_path:
-        return SetupSQLiteOutput(
+        return GenerateSQLiteDBOutput(
             success=False,
             message="Project path not set. Call set_project_path first."
         )
     
-    created_files = []
+    # Configure agent input
+    agent_input = SQLiteConfigInput(
+        app_description=input_config.app_description,
+        existing_files=input_config.existing_files,
+        file_contents=input_config.file_contents,
+        include_auth=input_config.include_auth,
+        include_session=input_config.include_session,
+        database_name=input_config.database_name
+    )
     
+    # Run the SQLite agent to design the database
     try:
-        # Step 1: Create db directory and schema file
-        db_dir = os.path.join(path_manager.project_path, "db")
-        os.makedirs(db_dir, exist_ok=True)
+        result = await sqlite_agent.run(
+            agent_input,
+            usage_limits=usage_limits or UsageLimits(request_limit=10, total_tokens_limit=100000)
+        )
         
-        schema_path = os.path.join(db_dir, "schema.sql")
-        with open(schema_path, "w", encoding="utf-8") as f:
-            f.write(input.schema_content)
-        created_files.append("/db/schema.sql")
+        if not result.success:
+            return GenerateSQLiteDBOutput(
+                success=False,
+                message=f"SQLite agent failed: {result.error_message}"
+            )
         
-        # Step 2: Create data directory for database file
-        data_dir = os.path.join(path_manager.project_path, "data")
-        os.makedirs(data_dir, exist_ok=True)
+        db_output = result.data
+        created_files = []
         
-        # Step 3: Add SQLite dependencies to package.json
-        package_json_path = os.path.join(path_manager.project_path, "package.json")
+        # Now implement the database files based on agent output
         try:
-            with open(package_json_path, "r", encoding="utf-8") as f:
-                package_data = json.load(f)
-                
+            # 1. Create db directory and schema file
+            db_dir = os.path.join(path_manager.project_path, "db")
+            os.makedirs(db_dir, exist_ok=True)
+            
+            schema_path = os.path.join(db_dir, "schema.sql")
+            with open(schema_path, "w", encoding="utf-8") as f:
+                f.write(db_output.schema_content)
+            created_files.append("/db/schema.sql")
+            
+            # 2. Create data directory for database file
+            data_dir = os.path.join(path_manager.project_path, "data")
+            os.makedirs(data_dir, exist_ok=True)
+            
+            # 3. Add SQLite dependencies to package.json
+            package_json_path = os.path.join(path_manager.project_path, "package.json")
+            try:
+                with open(package_json_path, "r", encoding="utf-8") as f:
+                    package_data = json.load(f)
+            except (FileNotFoundError, json.JSONDecodeError):
+                package_data = {
+                    "name": "nextjs-project",
+                    "version": "0.1.0",
+                    "private": True,
+                    "scripts": {
+                        "dev": "next dev",
+                        "build": "next build",
+                        "start": "next start"
+                    },
+                    "dependencies": {
+                        "next": "^12.0.0",
+                        "react": "^17.0.2",
+                        "react-dom": "^17.0.2"
+                    }
+                }
+            
             # Required dependencies
             dependencies = {
                 "better-sqlite3": "^8.6.0"
             }
             
             # Optional dependencies
-            if input.include_auth:
+            if input_config.include_auth:
                 dependencies.update({
                     "bcryptjs": "^2.4.3"
                 })
             
-            if input.include_session:
+            if input_config.include_session:
                 dependencies.update({
                     "iron-session": "^6.3.1"
                 })
@@ -90,19 +228,13 @@ def setup_sqlite_database(input: SetupSQLiteInput) -> SetupSQLiteOutput:
             
             with open(package_json_path, "w", encoding="utf-8") as f:
                 json.dump(package_data, f, indent=2)
-        except (FileNotFoundError, json.JSONDecodeError):
-            return SetupSQLiteOutput(
-                success=False,
-                message="package.json not found or invalid. Please ensure a valid package.json exists in the project root.",
-                created_files=created_files
-            )
-        
-        # Step 4: Create database library files
-        lib_dir = os.path.join(path_manager.project_path, "lib")
-        os.makedirs(lib_dir, exist_ok=True)
-        
-        # Create db.js - main database connection file
-        db_js_content = f"""// SQLite database connection using better-sqlite3
+            
+            # 4. Create database library files
+            lib_dir = os.path.join(path_manager.project_path, "lib")
+            os.makedirs(lib_dir, exist_ok=True)
+            
+            # Create db.js - main database connection file
+            db_js_content = f"""// SQLite database connection
 import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
@@ -114,7 +246,7 @@ if (!fs.existsSync(dataDir)) {{
 }}
 
 // Database file path
-const dbPath = path.join(dataDir, '{input.database_name}');
+const dbPath = path.join(dataDir, '{input_config.database_name}');
 
 // Create and initialize the database
 let db;
@@ -125,10 +257,10 @@ try {{
   // Enable foreign keys
   db.pragma('foreign_keys = ON');
   
-  // For development: check if we need to initialize the database
-  const tableExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='posts'").get();
+  // Check if database needs initialization
+  const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all();
   
-  if (!tableExists) {{
+  if (tables.length === 0) {{
     // Read and execute the schema file
     const schemaPath = path.join(process.cwd(), 'db', 'schema.sql');
     const schema = fs.readFileSync(schemaPath, 'utf8');
@@ -149,67 +281,26 @@ try {{
 // Export the database instance
 export default db;
 """
-        
-        db_js_path = os.path.join(lib_dir, "db.js")
-        with open(db_js_path, "w", encoding="utf-8") as f:
-            f.write(db_js_content)
-        created_files.append("/lib/db.js")
-        
-        # Create db-queries.js - reusable queries
-        queries_js_content = """// Database queries and utility functions
-import db from './db';
-"""
-
-        # Add authentication related queries if needed
-        if input.include_auth:
-            queries_js_content += """
-import bcrypt from 'bcryptjs';
-import crypto from 'crypto';
-
-// User-related queries
-export const userQueries = {
-  // Create a new user
-  createUser: db.prepare(`
-    INSERT INTO users (username, email, password, name, bio, avatar_url)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `),
-  
-  // Get user by ID
-  getUserById: db.prepare(`
-    SELECT id, username, email, name, bio, avatar_url, is_admin, created_at, updated_at
-    FROM users WHERE id = ?
-  `),
-  
-  // Get user by email (for login)
-  getUserByEmail: db.prepare(`
-    SELECT id, username, email, password, name, bio, avatar_url, is_admin, created_at, updated_at
-    FROM users WHERE email = ?
-  `)
-};
-
-// Helper functions for auth
-export function hashPassword(password) {
-  return bcrypt.hashSync(password, 10);
-}
-
-export function verifyPassword(password, hashedPassword) {
-  return bcrypt.compareSync(password, hashedPassword);
-}
-
-export function generateToken() {
-  return crypto.randomBytes(32).toString('hex');
-}
-"""
-
-        # Add session related code if needed
-        if input.include_session:
-            # Also create session.js
-            session_js_content = """// Iron session configuration
+            
+            db_js_path = os.path.join(lib_dir, "db.js")
+            with open(db_js_path, "w", encoding="utf-8") as f:
+                f.write(db_js_content)
+            created_files.append("/lib/db.js")
+            
+            # Create db-queries.js using agent output
+            queries_js_path = os.path.join(lib_dir, "db-queries.js")
+            with open(queries_js_path, "w", encoding="utf-8") as f:
+                f.write(db_output.db_utils_content)
+            created_files.append("/lib/db-queries.js")
+            
+            # Add session.js if needed
+            if input_config.include_session:
+                session_js_content = """// Iron session configuration
 import { withIronSessionApiRoute, withIronSessionSsr } from 'iron-session/next';
 
 const sessionOptions = {
   password: process.env.SESSION_PASSWORD || 'complex_password_at_least_32_characters_long',
-  cookieName: 'blog_session',
+  cookieName: 'app_session',
   cookieOptions: {
     secure: process.env.NODE_ENV === 'production',
     maxAge: 60 * 60 * 24 * 7, // 1 week
@@ -224,137 +315,390 @@ export function withSessionSsr(handler) {
   return withIronSessionSsr(handler, sessionOptions);
 }
 """
-            session_js_path = os.path.join(lib_dir, "session.js")
-            with open(session_js_path, "w", encoding="utf-8") as f:
-                f.write(session_js_content)
-            created_files.append("/lib/session.js")
-
-        # Add content query functions
-        queries_js_content += """
-// Post-related queries
-export const postQueries = {
-  // Create a new post
-  createPost: db.prepare(`
-    INSERT INTO posts (title, content, summary, slug, published, featured_image, author_id, category_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `),
-  
-  // Get all published posts
-  getAllPublishedPosts: db.prepare(`
-    SELECT p.*, 
-           u.username as author_username, u.name as author_name, u.avatar_url as author_avatar,
-           c.name as category_name, c.slug as category_slug,
-           (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comment_count,
-           (SELECT COUNT(*) FROM likes WHERE post_id = p.id) as like_count
-    FROM posts p
-    JOIN users u ON p.author_id = u.id
-    LEFT JOIN categories c ON p.category_id = c.id
-    WHERE p.published = 1
-    ORDER BY p.created_at DESC
-    LIMIT ? OFFSET ?
-  `),
-  
-  // Get total count of published posts
-  getPublishedPostCount: db.prepare(`
-    SELECT COUNT(*) as count FROM posts WHERE published = 1
-  `),
-  
-  // Get published post by slug
-  getPostBySlug: db.prepare(`
-    SELECT p.*, 
-           u.username as author_username, u.name as author_name, u.avatar_url as author_avatar,
-           c.name as category_name, c.slug as category_slug,
-           (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comment_count,
-           (SELECT COUNT(*) FROM likes WHERE post_id = p.id) as like_count
-    FROM posts p
-    JOIN users u ON p.author_id = u.id
-    LEFT JOIN categories c ON p.category_id = c.id
-    WHERE p.slug = ? AND (p.published = 1 OR p.author_id = ?)
-  `)
-};
-
-// Helper functions
-export function createSlug(title) {
-  return title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
-}
-"""
-        
-        queries_js_path = os.path.join(lib_dir, "db-queries.js")
-        with open(queries_js_path, "w", encoding="utf-8") as f:
-            f.write(queries_js_content)
-        created_files.append("/lib/db-queries.js")
-        
-        # Create basic API route for posts
-        api_dir = os.path.join(path_manager.project_path, "pages", "api")
-        posts_dir = os.path.join(api_dir, "posts")
-        os.makedirs(posts_dir, exist_ok=True)
-        
-        posts_index_content = """// API route for posts
-import db from '../../../lib/db';
-import { postQueries, createSlug } from '../../../lib/db-queries';
-
-export default function handler(req, res) {
-  // GET: Fetch posts with pagination
-  if (req.method === 'GET') {
-    const { page = 1, limit = 10 } = req.query;
-    const offset = (parseInt(page) - 1) * parseInt(limit);
-    
-    try {
-      const posts = postQueries.getAllPublishedPosts.all(limit, offset);
-      
-      // Get total count for pagination
-      const totalCount = postQueries.getPublishedPostCount.get().count;
-      
-      return res.status(200).json({
-        posts,
-        pagination: {
-          total: totalCount,
-          page: parseInt(page),
-          pageSize: parseInt(limit),
-          totalPages: Math.ceil(totalCount / parseInt(limit))
-        }
-      });
-    } catch (error) {
-      console.error('Error fetching posts:', error);
-      return res.status(500).json({ error: 'Failed to fetch posts' });
-    }
-  }
-  
-  // Method not allowed
-  res.setHeader('Allow', ['GET']);
-  return res.status(405).json({ error: `Method ${req.method} not allowed` });
-}
-"""
-        
-        posts_index_path = os.path.join(posts_dir, "index.js")
-        with open(posts_index_path, "w", encoding="utf-8") as f:
-            f.write(posts_index_content)
-        created_files.append("/pages/api/posts/index.js")
-        
-        # Create .env.local with database configuration
-        env_local_content = """# Database Configuration
-DATABASE_PATH=./data/blog.db
+                session_js_path = os.path.join(lib_dir, "session.js")
+                with open(session_js_path, "w", encoding="utf-8") as f:
+                    f.write(session_js_content)
+                created_files.append("/lib/session.js")
+            
+            # 5. Create API routes from agent output
+            api_dir = os.path.join(path_manager.project_path, "pages", "api")
+            os.makedirs(api_dir, exist_ok=True)
+            
+            for route_path, route_content in db_output.api_routes.items():
+                # Ensure directory exists
+                route_dir = os.path.dirname(os.path.join(api_dir, route_path))
+                os.makedirs(route_dir, exist_ok=True)
+                
+                # Write file
+                full_path = os.path.join(api_dir, route_path)
+                with open(full_path, "w", encoding="utf-8") as f:
+                    f.write(route_content)
+                
+                created_files.append(f"/pages/api/{route_path}")
+            
+            # 6. Create .env.local with database configuration
+            env_local_content = f"""# Database Configuration
+DATABASE_PATH=./data/{input_config.database_name}
 SESSION_PASSWORD=complex_password_at_least_32_characters_long
 """
-        env_local_path = os.path.join(path_manager.project_path, ".env.local")
-        with open(env_local_path, "w", encoding="utf-8") as f:
-            f.write(env_local_content)
-        created_files.append("/.env.local")
-        
-        return SetupSQLiteOutput(
-            success=True,
-            message="SQLite successfully set up in the Next.js project",
-            created_files=created_files
-        )
+            env_local_path = os.path.join(path_manager.project_path, ".env.local")
+            with open(env_local_path, "w", encoding="utf-8") as f:
+                f.write(env_local_content)
+            created_files.append("/.env.local")
+            
+            return GenerateSQLiteDBOutput(
+                success=True,
+                message="SQLite database successfully created for the Next.js application",
+                created_files=created_files
+            )
+            
+        except Exception as e:
+            return GenerateSQLiteDBOutput(
+                success=False,
+                message=f"Failed to implement SQLite database: {str(e)}",
+                created_files=created_files
+            )
+    
     except Exception as e:
-        return SetupSQLiteOutput(
+        return GenerateSQLiteDBOutput(
             success=False,
-            message=f"Failed to set up SQLite: {str(e)}",
-            created_files=created_files
+            message=f"SQLite agent execution failed: {str(e)}"
         )
+    
+
+
+# =======================
+# Tool for the Code Generation Agent to call the SQLite Agent
+# =======================
+
+class GenerateSQLiteDBInput(BaseModel):
+    """Input for generating a SQLite database through the agent"""
+    app_description: str
+    existing_files: Optional[List[str]] = None
+    file_contents: Optional[Dict[str, str]] = None
+    include_auth: bool = True
+    include_session: bool = True
+    database_name: str = "app.db"
+
+class GenerateSQLiteDBOutput(BaseModel):
+    """Output from generating a SQLite database"""
+    success: bool
+    message: str
+    created_files: List[str] = []
+
+async def generate_sqlite_database(
+    sqlite_agent: Agent,
+    input_config: GenerateSQLiteDBInput,
+    path_manager: Any,
+    usage_limits: Optional[UsageLimits] = None
+) -> GenerateSQLiteDBOutput:
+    """
+    Uses the SQLite agent to generate a database for the Next.js application.
+    
+    Args:
+        sqlite_agent: The agent specialized in SQLite database design
+        input_config: Configuration input for database generation
+        path_manager: The path manager for resolving file paths
+        usage_limits: Optional usage limits for the agent
+        
+    Returns:
+        Result of database generation
+    """
+    if not path_manager.project_path:
+        return GenerateSQLiteDBOutput(
+            success=False,
+            message="Project path not set. Call set_project_path first."
+        )
+    
+    # Configure agent input
+    agent_input = SQLiteConfigInput(
+        app_description=input_config.app_description,
+        existing_files=input_config.existing_files,
+        file_contents=input_config.file_contents,
+        include_auth=input_config.include_auth,
+        include_session=input_config.include_session,
+        database_name=input_config.database_name
+    )
+    
+    # Run the SQLite agent to design the database
+    try:
+        result = await sqlite_agent.run(
+            agent_input,
+            usage_limits=usage_limits or UsageLimits(request_limit=10, total_tokens_limit=100000)
+        )
+        
+        if not result.success:
+            return GenerateSQLiteDBOutput(
+                success=False,
+                message=f"SQLite agent failed: {result.error_message}"
+            )
+        
+        db_output = result.data
+        created_files = []
+        
+        # Now implement the database files based on agent output
+        try:
+            # 1. Create db directory and schema file
+            db_dir = os.path.join(path_manager.project_path, "db")
+            os.makedirs(db_dir, exist_ok=True)
+            
+            schema_path = os.path.join(db_dir, "schema.sql")
+            with open(schema_path, "w", encoding="utf-8") as f:
+                f.write(db_output.schema_content)
+            created_files.append("/db/schema.sql")
+            
+            # 2. Create data directory for database file
+            data_dir = os.path.join(path_manager.project_path, "data")
+            os.makedirs(data_dir, exist_ok=True)
+            
+            # 3. Add SQLite dependencies to package.json
+            package_json_path = os.path.join(path_manager.project_path, "package.json")
+            try:
+                with open(package_json_path, "r", encoding="utf-8") as f:
+                    package_data = json.load(f)
+            except (FileNotFoundError, json.JSONDecodeError):
+                package_data = {
+                    "name": "nextjs-project",
+                    "version": "0.1.0",
+                    "private": True,
+                    "scripts": {
+                        "dev": "next dev",
+                        "build": "next build",
+                        "start": "next start"
+                    },
+                    "dependencies": {
+                        "next": "^12.0.0",
+                        "react": "^17.0.2",
+                        "react-dom": "^17.0.2"
+                    }
+                }
+            
+            # Required dependencies
+            dependencies = {
+                "better-sqlite3": "^8.6.0"
+            }
+            
+            # Optional dependencies
+            if input_config.include_auth:
+                dependencies.update({
+                    "bcryptjs": "^2.4.3"
+                })
+            
+            if input_config.include_session:
+                dependencies.update({
+                    "iron-session": "^6.3.1"
+                })
+            
+            # Update dependencies
+            if "dependencies" not in package_data:
+                package_data["dependencies"] = {}
+            
+            package_data["dependencies"].update(dependencies)
+            
+            with open(package_json_path, "w", encoding="utf-8") as f:
+                json.dump(package_data, f, indent=2)
+            
+            # 4. Create database library files
+            lib_dir = os.path.join(path_manager.project_path, "lib")
+            os.makedirs(lib_dir, exist_ok=True)
+            
+            # Create db.js - main database connection file
+            db_js_content = f"""// SQLite database connection
+import Database from 'better-sqlite3';
+import path from 'path';
+import fs from 'fs';
+
+// Ensure the data directory exists
+const dataDir = path.join(process.cwd(), 'data');
+if (!fs.existsSync(dataDir)) {{
+  fs.mkdirSync(dataDir, {{ recursive: true }});
+}}
+
+// Database file path
+const dbPath = path.join(dataDir, '{input_config.database_name}');
+
+// Create and initialize the database
+let db;
+
+try {{
+  db = new Database(dbPath);
+  
+  // Enable foreign keys
+  db.pragma('foreign_keys = ON');
+  
+  // Check if database needs initialization
+  const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all();
+  
+  if (tables.length === 0) {{
+    // Read and execute the schema file
+    const schemaPath = path.join(process.cwd(), 'db', 'schema.sql');
+    const schema = fs.readFileSync(schemaPath, 'utf8');
+    
+    // Split by semicolon to execute each statement separately
+    schema.split(';').forEach(statement => {{
+      if (statement.trim()) {{
+        db.prepare(statement).run();
+      }}
+    }});
+    
+    console.log('Database initialized with schema');
+  }}
+}} catch (error) {{
+  console.error('Database initialization error:', error);
+}}
+
+// Export the database instance
+export default db;
+"""
+            
+            db_js_path = os.path.join(lib_dir, "db.js")
+            with open(db_js_path, "w", encoding="utf-8") as f:
+                f.write(db_js_content)
+            created_files.append("/lib/db.js")
+            
+            # Create db-queries.js using agent output
+            queries_js_path = os.path.join(lib_dir, "db-queries.js")
+            with open(queries_js_path, "w", encoding="utf-8") as f:
+                f.write(db_output.db_utils_content)
+            created_files.append("/lib/db-queries.js")
+            
+            # Add session.js if needed
+            if input_config.include_session:
+                session_js_content = """// Iron session configuration
+import { withIronSessionApiRoute, withIronSessionSsr } from 'iron-session/next';
+
+const sessionOptions = {
+  password: process.env.SESSION_PASSWORD || 'complex_password_at_least_32_characters_long',
+  cookieName: 'app_session',
+  cookieOptions: {
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 60 * 60 * 24 * 7, // 1 week
+  },
+};
+
+export function withSessionRoute(handler) {
+  return withIronSessionApiRoute(handler, sessionOptions);
+}
+
+export function withSessionSsr(handler) {
+  return withIronSessionSsr(handler, sessionOptions);
+}
+"""
+                session_js_path = os.path.join(lib_dir, "session.js")
+                with open(session_js_path, "w", encoding="utf-8") as f:
+                    f.write(session_js_content)
+                created_files.append("/lib/session.js")
+            
+            # 5. Create API routes from agent output
+            api_dir = os.path.join(path_manager.project_path, "pages", "api")
+            os.makedirs(api_dir, exist_ok=True)
+            
+            for route_path, route_content in db_output.api_routes.items():
+                # Ensure directory exists
+                route_dir = os.path.dirname(os.path.join(api_dir, route_path))
+                os.makedirs(route_dir, exist_ok=True)
+                
+                # Write file
+                full_path = os.path.join(api_dir, route_path)
+                with open(full_path, "w", encoding="utf-8") as f:
+                    f.write(route_content)
+                
+                created_files.append(f"/pages/api/{route_path}")
+            
+            # 6. Create .env.local with database configuration
+            env_local_content = f"""# Database Configuration
+DATABASE_PATH=./data/{input_config.database_name}
+SESSION_PASSWORD=complex_password_at_least_32_characters_long
+"""
+            env_local_path = os.path.join(path_manager.project_path, ".env.local")
+            with open(env_local_path, "w", encoding="utf-8") as f:
+                f.write(env_local_content)
+            created_files.append("/.env.local")
+            
+            return GenerateSQLiteDBOutput(
+                success=True,
+                message="SQLite database successfully created for the Next.js application",
+                created_files=created_files
+            )
+            
+        except Exception as e:
+            return GenerateSQLiteDBOutput(
+                success=False,
+                message=f"Failed to implement SQLite database: {str(e)}",
+                created_files=created_files
+            )
+    
+    except Exception as e:
+        return GenerateSQLiteDBOutput(
+            success=False,
+            message=f"SQLite agent execution failed: {str(e)}"
+        )
+
+# =======================
+# Tool for Code Generation Agent to Use
+# =======================
+
+@code_generation_agent.tool
+async def generate_sqlite_database_tool(
+    ctx: RunContext[Dict[str, Any]], 
+    app_description: str,
+    include_auth: bool = True,
+    include_session: bool = True,
+    database_name: str = "app.db"
+) -> str:
+    """
+    Generate a SQLite database for the Next.js application.
+    
+    Args:
+        app_description: Description of what the application does and what data it needs
+        include_auth: Whether to include authentication features (default: True)
+        include_session: Whether to include session management (default: True)
+        database_name: Name of the SQLite database file (default: "app.db")
+        
+    Returns:
+        A message describing the result of the database generation
+    """
+    # Get list of existing pages to analyze
+    from . import list_all_pages
+    pages = list_all_pages().pages
+    
+    # Read content of existing pages
+    file_contents = {}
+    from . import read_page, ReadPageInput
+    for page_path in pages:
+        content = read_page(ReadPageInput(url=page_path)).content
+        if content:
+            file_contents[page_path] = content
+    
+    # Configure input
+    input_config = GenerateSQLiteDBInput(
+        app_description=app_description,
+        existing_files=pages,
+        file_contents=file_contents,
+        include_auth=include_auth,
+        include_session=include_session,
+        database_name=database_name
+    )
+    
+    # Call the database generation function
+    from . import path_manager
+    sqlite_agent = create_sqlite_agent(ctx.ai_model)
+    
+    result = await generate_sqlite_database(
+        sqlite_agent=sqlite_agent,
+        input_config=input_config,
+        path_manager=path_manager
+    )
+    
+    if result.success:
+        files_created = "\n- " + "\n- ".join(result.created_files)
+        return f"SQLite database generated successfully. Created files: {files_created}"
+    else:
+        return f"Failed to generate SQLite database: {result.message}"
+
+
+
+
 
 
 
@@ -579,42 +923,67 @@ cypress_tests_agent = Agent(
 
 
 
-
-
+# =======================
+# Tool for Code Generation Agent to Use
+# =======================
 
 @code_generation_agent.tool
-async def setup_sqlite_tool(ctx: RunContext[Dict[str, Any]], schema_content: str, 
-                           include_auth: bool = True, include_session: bool = True,
-                           database_name: str = "blog.db") -> str:
+async def generate_sqlite_database_tool(
+    ctx: RunContext[Dict[str, Any]], 
+    app_description: str,
+    include_auth: bool = True,
+    include_session: bool = True,
+    database_name: str = "app.db"
+) -> str:
     """
-    Set up a SQLite database in the Next.js project.
+    Generate a SQLite database for the Next.js application.
     
     Args:
-        schema_content: The SQL schema content to initialize the database with tables
+        app_description: Description of what the application does and what data it needs
         include_auth: Whether to include authentication features (default: True)
         include_session: Whether to include session management (default: True)
-        database_name: Name of the SQLite database file (default: "blog.db")
+        database_name: Name of the SQLite database file (default: "app.db")
         
     Returns:
-        A message describing the result of the setup process with a list of created files
+        A message describing the result of the database generation
     """
-    # Create input model
-    input_config = SetupSQLiteInput(
-        schema_content=schema_content,
+    # Get list of existing pages to analyze
+    from . import list_all_pages
+    pages = list_all_pages().pages
+    
+    # Read content of existing pages
+    file_contents = {}
+    from . import read_page, ReadPageInput
+    for page_path in pages:
+        content = read_page(ReadPageInput(url=page_path)).content
+        if content:
+            file_contents[page_path] = content
+    
+    # Configure input
+    input_config = GenerateSQLiteDBInput(
+        app_description=app_description,
+        existing_files=pages,
+        file_contents=file_contents,
         include_auth=include_auth,
         include_session=include_session,
         database_name=database_name
     )
     
-    # Call the function to set up SQLite
-    result = setup_sqlite_database(input_config)
+    # Call the database generation function
+    from . import path_manager
+    sqlite_agent = create_sqlite_agent(ctx.ai_model)
+    
+    result = await generate_sqlite_database(
+        sqlite_agent=sqlite_agent,
+        input_config=input_config,
+        path_manager=path_manager
+    )
     
     if result.success:
         files_created = "\n- " + "\n- ".join(result.created_files)
-        return f"SQLite database set up successfully. Created files: {files_created}"
+        return f"SQLite database generated successfully. Created files: {files_created}"
     else:
-        return f"Failed to set up SQLite database: {result.message}"
-
+        return f"Failed to generate SQLite database: {result.message}"
 
 
 
