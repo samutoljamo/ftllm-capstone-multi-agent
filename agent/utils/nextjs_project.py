@@ -16,7 +16,8 @@ def create_base_nextjs_project(project_path: str) -> None:
         
         # Create the directory structure
         os.makedirs(os.path.join(project_path, "pages"), exist_ok=True)
-        os.makedirs(os.path.join(project_path, "cypress", "integration"), exist_ok=True)
+        os.makedirs(os.path.join(project_path, "cypress", "e2e"), exist_ok=True)
+        os.makedirs(os.path.join(project_path, "cypress", "support"), exist_ok=True)
         os.makedirs(os.path.join(project_path, "styles"), exist_ok=True)
         os.makedirs(os.path.join(project_path, "public"), exist_ok=True)
         os.makedirs(os.path.join(project_path, "components"), exist_ok=True)
@@ -40,7 +41,7 @@ def create_base_nextjs_project(project_path: str) -> None:
                 "tailwindcss": "^3.0.0"
             },
             "devDependencies": {
-                "cypress": "^9.2.0",
+                "cypress": "^14.2.0",
                 "autoprefixer": "^10.4.0",
                 "postcss": "^8.4.5"
             }
@@ -96,9 +97,17 @@ export default MyApp
             f.write(app_js)
             
         # Create cypress.json config
-        cypress_json = {
-            "baseUrl": "http://localhost:3000",
-            "video": False
-        }
-        with open(os.path.join(project_path, "cypress.json"), "w") as f:
-            json.dump(cypress_json, f, indent=2)
+        cypress_config = """
+                const { defineConfig } = require('cypress')
+
+                module.exports = defineConfig({
+                e2e: {
+                    baseUrl: 'http://localhost:3000',
+                },
+                })"""
+        with open(os.path.join(project_path, "cypress.config.js"), "w") as f:
+            f.write(cypress_config)
+
+        # write default support file
+        with open(os.path.join(project_path, "cypress", "support", "e2e.js"), "w") as f:
+            f.write("")

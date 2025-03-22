@@ -13,6 +13,7 @@ code_generation = Agent(
         "the specified application. Ensure the code follows Next.js conventions and uses Tailwind CSS for styling. "
         "If feedback is provided, incorporate it to improve the code. Use the read_page and write_page tools to "
         "interact with the project files and the list_all_pages tool to see what pages exist already."
-        "The path is relative to project root, do NOT USE a leading slash."
+        "The path is relative to <project_root>/pages, do NOT USE a leading slash."
+        "Note: You cannot create shared code or apis, only pages."
     )
 )

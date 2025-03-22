@@ -88,10 +88,11 @@ def start_nextjs_server(project_path: str) -> Dict[str, Any]:
                 "success": True,
                 "pid": server_process.pid,
                 "process_group": os.getpgid(server_process.pid),
-                "message": "Next.js server started successfully"
+                "message": "Next.js server started successfully",
+                "process": server_process  # Store the process object for later output reading
             }
         else:
-            stderr = server_process.stderr.read()
+            stderr = server_process.stderr.read() if server_process.stderr else ""
             return {
                 "success": False,
                 "output": "",
@@ -104,19 +105,63 @@ def start_nextjs_server(project_path: str) -> Dict[str, Any]:
             "errors": [f"Unexpected error starting Next.js server: {str(e)}"]
         }
 
-def stop_server(process_info: Dict[str, Any]) -> None:
+def stop_server(process_info: Dict[str, Any]) -> Dict[str, str]:
     """
-    Stops a running Next.js server.
+    Stops a running Next.js server and captures its output.
     
     Args:
         process_info: Process information dictionary from start_nextjs_server
+        
+    Returns:
+        A dictionary with stdout and stderr from the server process
     """
-    if process_info and process_info.get("success") and process_info.get("process_group"):
+    server_stdout = ""
+    server_stderr = ""
+    
+    if process_info and process_info.get("success") and "process" in process_info:
+        server_process = process_info["process"]
+        
         try:
-            os.killpg(process_info["process_group"], signal.SIGTERM)
+            # First, capture all remaining output from the server
+            stdout, stderr = server_process.communicate(timeout=5)
+            server_stdout = stdout if stdout else ""
+            server_stderr = stderr if stderr else ""
+            
+            # Kill the process group
+            if process_info.get("process_group"):
+                os.killpg(process_info["process_group"], signal.SIGTERM)
+                
+            # Wait for the process to fully terminate
+            try:
+                server_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                # If the server hasn't shut down gracefully, force kill
+                os.killpg(process_info["process_group"], signal.SIGKILL)
+                
             print("Next.js server stopped")
+            
+        except subprocess.TimeoutExpired:
+            # If communicate times out, force kill and try to get remaining output
+            if process_info.get("process_group"):
+                os.killpg(process_info["process_group"], signal.SIGKILL)
+                
+            # Try to get any remaining output after force kill
+            try:
+                stdout, stderr = server_process.communicate(timeout=2)
+                server_stdout += stdout if stdout else ""
+                server_stderr += stderr if stderr else ""
+            except:
+                pass
+                
+            print("Next.js server force killed")
+            
         except Exception as e:
             print(f"Error stopping server: {str(e)}")
+    
+    return {
+        "stdout": server_stdout,
+        "stderr": server_stderr
+    }
 
 def run_cypress_tests(project_path: str) -> Dict[str, Any]:
     """
@@ -138,7 +183,6 @@ def run_cypress_tests(project_path: str) -> Dict[str, Any]:
     
     # Check for test file and create proper directory structure if needed
     cypress_e2e_dir = os.path.join(project_path, "cypress", "e2e")
-    cypress_integration_dir = os.path.join(project_path, "cypress", "integration")
     
     # Make sure e2e directory exists (for newer Cypress versions)
     os.makedirs(cypress_e2e_dir, exist_ok=True)
@@ -146,7 +190,6 @@ def run_cypress_tests(project_path: str) -> Dict[str, Any]:
     # Find test file in either location
     test_file_paths = [
         os.path.join(cypress_e2e_dir, "app.cy.js"),
-        os.path.join(cypress_integration_dir, "tests.spec.js")
     ]
     
     test_file_exists = any(os.path.exists(path) for path in test_file_paths)
@@ -167,7 +210,9 @@ def run_cypress_tests(project_path: str) -> Dict[str, Any]:
         }
     
     # Step 2: Start the Next.js server
-    server_process = None
+    server_info = None
+    server_output = {"stdout": "", "stderr": ""}
+    
     try:
         server_info = start_nextjs_server(project_path)
         if not server_info["success"]:
@@ -176,7 +221,7 @@ def run_cypress_tests(project_path: str) -> Dict[str, Any]:
                 "output": "",
                 "errors": server_info.get("errors", ["Failed to start Next.js server"])
             }
-
+        
         # Step 3: Run Cypress tests
         print("Running Cypress tests...")
         result = subprocess.run(
@@ -190,30 +235,48 @@ def run_cypress_tests(project_path: str) -> Dict[str, Any]:
         # Process the result
         success = result.returncode == 0
         
+        # Step 4: Stop the Next.js server and capture its output
+        if server_info and server_info.get("success"):
+            server_output = stop_server(server_info)
+        
+        print("Cypress test results:")
+        # Include the server output in the results
         return {
             "success": success,
             "output": result.stdout,
-            "errors": [result.stderr] if result.stderr and not success else []
+            "errors": [result.stderr] if result.stderr and not success else [],
+            "server_output": server_output
         }
     except subprocess.TimeoutExpired:
+        # Make sure to stop the server even if tests time out
+        if server_info and server_info.get("success"):
+            server_output = stop_server(server_info)
+            
         return {
             "success": False,
             "output": "Test execution timed out",
-            "errors": ["Cypress test execution timed out after 120 seconds"]
+            "errors": ["Cypress test execution timed out after 120 seconds"],
+            "server_output": server_output
         }
     except subprocess.SubprocessError as e:
+        # Make sure to stop the server on any error
+        if server_info and server_info.get("success"):
+            server_output = stop_server(server_info)
+            
         return {
             "success": False,
             "output": "",
-            "errors": [f"Error running Cypress tests: {str(e)}"]
+            "errors": [f"Error running Cypress tests: {str(e)}"],
+            "server_output": server_output
         }
     except Exception as e:
+        # Make sure to stop the server on any error
+        if server_info and server_info.get("success"):
+            server_output = stop_server(server_info)
+            
         return {
             "success": False,
             "output": "",
-            "errors": [f"Unexpected error: {str(e)}"]
+            "errors": [f"Unexpected error: {str(e)}"],
+            "server_output": server_output
         }
-    finally:
-        # Step 4: Stop the Next.js server
-        if server_info and server_info.get("success"):
-            stop_server(server_info)

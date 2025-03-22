@@ -72,14 +72,15 @@ async def generate_cypress_tests_with_tools(project_path: str, deps: CodeGenerat
     
     print("Cypress tests generation completed")
 
-async def get_feedback(test_output: str, test_errors: List[str], deps: CodeGenerationDeps) -> FeedbackOutput:
+async def get_feedback(test_output: str, test_errors: List[str], server_output: Dict[str, str], deps: CodeGenerationDeps) -> FeedbackOutput:
     """Get feedback based on test results"""
     print("Getting feedback on test results...")
     
     # Prepare input for the feedback agent
     input_data = {
         "test_output": test_output,
-        "test_errors": test_errors
+        "test_errors": test_errors,
+        "server_output": server_output
     }
     
     # Call feedback agent
@@ -150,7 +151,12 @@ async def full_development_flow(project_description: str, max_iterations: int = 
             break
         
         # If tests fail, get feedback for next iteration
-        feedback_result = await get_feedback(test_result['output'], test_result['errors'], deps)
+        feedback_result = await get_feedback(
+            test_result['output'], 
+            test_result['errors'], 
+            test_result.get('server_output', {}),  # Pass server output to feedback agent
+            deps
+        )
         print(f"Feedback: {feedback_result.feedback_message}")
         if hasattr(feedback_result, 'suggestions'):
             print(f"Suggestions: {feedback_result.suggestions}")

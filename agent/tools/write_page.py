@@ -12,10 +12,10 @@ class WritePageOutput(BaseModel):
     message: Optional[str] = None
 
 def _write_page(ctx: RunContext, input: WritePageInput) -> WritePageOutput:
-    print(ctx.deps)
+    if(input.url.startswith("/")):
+        input.url = input.url[1:]
     print(f"Writing page to {input.url}")
-    actual_path = os.path.join(ctx.deps.project_path, input.url)
-    print(f"Actual path: {actual_path}")
+    actual_path = os.path.join(ctx.deps.project_path, "pages", input.url)
     os.makedirs(os.path.dirname(actual_path), exist_ok=True)
     with open(actual_path, "w", encoding="utf-8") as f:
         f.write(input.content)
