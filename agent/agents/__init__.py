@@ -9,7 +9,9 @@ from .context import (
     CodeGenerationDeps,
     CypressTestsDeps,
     FeedbackDeps,
-    FeedbackOutput
+    FeedbackOutput,
+    SQLiteConfigInput,
+    SQLiteConfigOutput
 )
 
 __all__ = [
@@ -19,5 +21,7 @@ __all__ = [
     'CodeGenerationDeps',
     'CypressTestsDeps',
     'FeedbackDeps',
-    'FeedbackOutput'
+    'FeedbackOutput',
+    'SQLiteConfigInput',
+    'SQLiteConfigOutput'
 ]

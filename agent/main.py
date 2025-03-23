@@ -14,13 +14,13 @@ from utils.nextjs_project import create_base_nextjs_project
 from utils.cypress_runner import run_cypress_tests
 
 # Import agents
-from agents import code_generation, cypress_tests, feedback, FeedbackOutput
-from agents.context import CodeGenerationDeps
+from agents import code_generation, cypress_tests, feedback
+from agents.context import CodeGenerationDeps, FeedbackOutput
 
 
 # =======================
 # Define AI Model and Usage Limits
-# =======================
+# =======================x
 
 # Define a common usage limit for all agents
 DEFAULT_USAGE_LIMITS = UsageLimits(request_limit=100, total_tokens_limit=1000000)
@@ -52,6 +52,8 @@ async def generate_code_with_tools(project_description: str, project_path: str, 
         model=ai_model,
         deps=deps
     )
+    print("code generation agent " )
+    print(code_generation)
     
     print(f"Code generation completed, files written to project")
 
@@ -115,7 +117,7 @@ async def full_development_flow(project_description: str, max_iterations: int = 
     # Create a usage tracker for token usage
     usage = Usage()
 
-    deps = CodeGenerationDeps(project_path=project_path, project_description=project_description)
+    deps = CodeGenerationDeps(project_path=project_path, project_description=project_description, ai_model_name=ai_model.model_name)
     
     # Store development artifacts
     feedback_result = None
@@ -176,11 +178,11 @@ async def full_development_flow(project_description: str, max_iterations: int = 
 if __name__ == "__main__":
     # Example project description
     project_description = """
-    Create a basic Next.js application that displays a list of blog posts. 
-    Each post should have a title, author, date, and content. 
-    Users should be able to click on a post to view its full content.
-    The application should have a clean, responsive design using Tailwind CSS.
-    It should be nice-looking.
+Create a simple Next.js application for a personal recipe collection. 
+The application should display a grid of recipe cards, each showing an image, title, preparation time, and difficulty level.
+Users should be able to click on a recipe card to view the full details including ingredients, instructions, and serving size.
+Implement sorting options to filter recipes by preparation time, difficulty, or newest additions.
+The application should feature a responsive, modern design using Tailwind CSS with an appealing color scheme suitable for a food-related website.
     """
     
     # Run the development process with direct agent invocation using tools
