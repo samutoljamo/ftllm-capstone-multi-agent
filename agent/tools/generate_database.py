@@ -49,8 +49,9 @@ async def generate_sqlite_database(
     
     
     # Set default usage limits if none provided
-    if not usage_limits:
-        usage_limits = UsageLimits(request_limit=10, total_tokens_limit=100000)
+
+    usage_limits = UsageLimits(request_limit=10, total_tokens_limit=100000)
+
     
     # Configure the input data for the agent
     input_data = {
@@ -73,11 +74,11 @@ async def generate_sqlite_database(
     print(f"SQLite agent result: {result}")
 
 
-    if result.success:
-        files_created = "\n- " + "\n- ".join(result.created_files)
+    if result.data.success:
+        files_created = "\n- " + "\n- ".join(result.data.created_files)
         return f"SQLite database generated successfully. Created files: {files_created}"
     else:
-        return f"Failed to generate SQLite database: {result.message}"
+        return f"Failed to generate SQLite database: {result.data.message}"
 
 
 # Create the Tool instance for this function

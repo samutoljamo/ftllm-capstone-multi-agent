@@ -9,7 +9,7 @@ from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.providers.openai import OpenAIProvider
 from dotenv import load_dotenv; load_dotenv()
 
-from .context import SQLiteConfigInput, SQLiteConfigOutput
+from .context import CodeGenerationDeps, SQLiteConfigOutput
 
 from tools.database.list_available_files import list_available_files
 from tools.database.read_file_content import read_file_content
@@ -25,7 +25,7 @@ def create_sqlite_agent():
     """Creates an agent specialized in designing and implementing SQLite databases for Next.js"""
 
     sqlite_agent = Agent(
-        deps_type=SQLiteConfigInput,
+        deps_type=CodeGenerationDeps,
         result_type=SQLiteConfigOutput,
         system_prompt = (
         "You are an expert in designing and implementing SQLite databases for Next.js applications. "
