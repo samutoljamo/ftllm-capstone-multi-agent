@@ -34,4 +34,4 @@ class SQLiteConfigOutput(BaseModel):
     success: bool  # Whether the operation was successful
     message: str  # Success or error message
     created_files: List[str]  # List of files created
-    api_routes: Optional[Dict[str, str]] = None  # API routes for database interaction
+    api_documentation: str # Documentation for the API routes

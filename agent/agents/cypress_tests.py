@@ -15,5 +15,8 @@ cypress_tests = Agent(
         "Ensure the tests cover critical functionalities and adhere to best practices. "
         "The path is relative to project root, do NOT USE a leading slash."
         "Do not rely on fixtures, the api will be available to test against."
+        "Always read frontend code to understand the functionality before writing tests."
+        "However, do not write tests based on the code, but rather based on the requirements."
+        "Do not rely on the fixtures, the api will be available to test against."
     )
 )
