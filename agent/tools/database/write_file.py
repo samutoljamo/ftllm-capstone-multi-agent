@@ -12,6 +12,8 @@ class WriteFileOutput(BaseModel):
     message: str
 
 def write_file(ctx: RunContext, input: WriteFileInput) -> WriteFileOutput:
+    print(f"Database agent writing file {input.file_path}")
+
     path = input.file_path
     if path.startswith("/"):
         path = path[1:]
@@ -22,6 +24,7 @@ def write_file(ctx: RunContext, input: WriteFileInput) -> WriteFileOutput:
     elif path.startswith("db/"):
         actual_path = os.path.join(ctx.deps.project_path, path)
     else:
+        print("Access denied: Database agent can only write to api/ or db/ paths")
         return WriteFileOutput(
             success=False, 
             message=f"Access denied: Database agent can only write to api/ or db/ paths"

@@ -11,6 +11,7 @@ async def list_available_files(ctx: RunContext) -> List[str]:
     Returns:
         List of file paths relevant to the database agent
     """
+    print("Listing available files for database agent")
     
     # Scan the relevant directories
     project_path = ctx.deps.project_path
@@ -44,6 +45,7 @@ async def list_available_files(ctx: RunContext) -> List[str]:
     else:
         print("API directory (pages/api) not found")
     
+    print(f"Database agent found {len(files)} files: {files}")
     return files
 
 list_available_files = Tool(list_available_files)

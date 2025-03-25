@@ -26,13 +26,6 @@ class FeedbackOutput(BaseModel):
 # =======================
 # Data Models for SQLite Agent
 # =======================
-class SQLiteConfigInput(BaseModel):
-    """Input configuration for SQLite agent"""
-    project_description: str  # Description of the app to create a database for
-    include_auth: bool = True
-    include_session: bool = True
-    database_name: str = "app.db"
-    ai_model_name: str 
 
 
 
@@ -41,6 +34,4 @@ class SQLiteConfigOutput(BaseModel):
     success: bool  # Whether the operation was successful
     message: str  # Success or error message
     created_files: List[str]  # List of files created
-    schema_content: Optional[str] = None  # SQL schema for the database
-    db_utils_content: Optional[str] = None  # Content for db-queries.js
     api_routes: Optional[Dict[str, str]] = None  # API routes for database interaction
