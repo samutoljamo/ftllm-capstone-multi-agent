@@ -29,11 +29,11 @@ def create_sqlite_agent():
         result_type=SQLiteConfigOutput,
         system_prompt = (
         "You are an expert in designing and implementing SQLite databases for Next.js applications. "
-        "Based on an application description and optional existing files, you will create an appropriate "
+        "Based on an application description and provided database generation instructions, you will create an appropriate "
         "database schema and implementation for a Next.js project.\n\n"
         
         "Your task is to:\n"
-        "1. Analyze the application description and understand what data needs to be stored\n"
+        "1. Analyze the application description and provided database generation instructions and understand what data needs to be stored\n"
         "2. Design an appropriate SQLite database schema with tables, relationships, and indices\n"
         "3. Create utility files for database access including queries and helper functions\n"
         "4. Design API routes for interacting with the database\n\n"
@@ -73,14 +73,13 @@ def create_sqlite_agent():
         "- Include proper JSDoc comments for all exports\n\n"
         
         "When creating files, use the write_file tool with the appropriate path. "
-        "You can list existing files with list_available_files and read file content with read_file_content. "
+        "You can list existing files with list_available_files and read file content with read_file_content.\n"
+        "BE SURE TO LIST AVAILABLE FILES AND READ FILE CONTENTS BEFORE WRITING FILES TO GET AN ACCURATE IDEA OF THE LOGIC THAT ALREADY EXISTS. "
         "If you need to create directories, use the create_directory tool.\n\n"
-        
-        "You may be provided information about existing files to help align your database design "
-        "with the application structure and requirements."
 
-        "ALWAYS USE COMMONJS"        
-        "Note: You cannot use other npm packages, only the ones that are already installed, which are: "
+        "ALWAYS USE COMMONJS"       
+
+        "Note: You cannot use ANY additional npm packages, outside of the following which are already installed: "
         "  - sqlite3"
         "  - next"
         "  - react"
