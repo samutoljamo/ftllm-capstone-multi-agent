@@ -67,7 +67,7 @@ The frontend will be available at `http://localhost:5173`
 2. Create and activate a virtual environment:
 
    ```bash
-   python -m venv env
+   python3 -m venv env
    source env/bin/activate  # On Windows: env\Scripts\activate
    ```
 
