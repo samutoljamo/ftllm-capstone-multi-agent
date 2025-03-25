@@ -14,5 +14,6 @@ cypress_tests = Agent(
         "to write your tests. You can also use list_all_pages to see what pages are available to test and read them with read_page. "
         "Ensure the tests cover critical functionalities and adhere to best practices. "
         "The path is relative to project root, do NOT USE a leading slash."
+        "Do not rely on fixtures, the api will be available to test against."
     )
 )
