@@ -10,12 +10,13 @@ import json
 
 async def generate_sqlite_database(
     ctx: RunContext[Dict[str, Any]], 
+    database_generation_instructions: str = None
 ) -> str:
     """
     Generate a SQLite database for the Next.js application.
     
     Args:
-        database_name: Name of the SQLite database file (default: "app.db")
+        database_generation_instructions: Instructions on how to design or improve the database.
         
     Returns:
         A message describing the result of the database generation
@@ -52,16 +53,16 @@ async def generate_sqlite_database(
 
     usage_limits = UsageLimits(request_limit=10, total_tokens_limit=100000)
 
-    
     # Configure the input data for the agent
     input_data = {
         "project_description": project_description,
-        "project_path": project_path
+        "project_path": project_path,
+        "database_generation_instructions": database_generation_instructions
     }
 
     print("Running SQLite agent")
     print(f"- Project path: {project_path}")
-
+    print(f"- Database generation instructions: {database_generation_instructions}")
     # Run the agent
     result = await sqlite_agent.run(
         json.dumps(input_data),
