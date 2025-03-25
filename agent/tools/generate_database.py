@@ -3,22 +3,18 @@ from pydantic_ai import RunContext, Tool
 import os
 from typing import Dict, Any
 from agents.sqlite_agent import create_sqlite_agent
-from tools.run_sqlite_agent import run_sqlite_agent_and_implement
 from pydantic_ai.models.openai import OpenAIModel
+from pydantic_ai.usage import UsageLimits
+import json
 
 
 async def generate_sqlite_database(
     ctx: RunContext[Dict[str, Any]], 
-    include_auth: bool = True,
-    include_session: bool = True,
-    database_name: str = "app.db",
 ) -> str:
     """
     Generate a SQLite database for the Next.js application.
     
     Args:
-        include_auth: Whether to include authentication features (default: True)
-        include_session: Whether to include session management (default: True)
         database_name: Name of the SQLite database file (default: "app.db")
         
     Returns:
@@ -30,6 +26,10 @@ async def generate_sqlite_database(
     project_path = getattr(ctx.deps, 'project_path', None)
     if not project_path:
         return "Failed to generate SQLite database: Project path not available in context"
+    
+    project_description = getattr(ctx.deps, 'project_description', None)
+    if not project_description:
+        return "Failed to generate SQLite database: Project description not available in context"
     
     # Get AI model from context
     ai_model_name = getattr(ctx.deps, 'ai_model_name', None)
@@ -47,16 +47,31 @@ async def generate_sqlite_database(
     # Run the SQLite agent
     sqlite_agent = create_sqlite_agent()
     
-    result = await run_sqlite_agent_and_implement(
-        sqlite_agent=sqlite_agent,
-        app_description=ctx.deps.project_description,
-        include_auth=include_auth,
-        include_session=include_session,
-        database_name=database_name,
-        project_path=project_path,
-        ai_model=ai_model,
+    
+    # Set default usage limits if none provided
+    if not usage_limits:
+        usage_limits = UsageLimits(request_limit=10, total_tokens_limit=100000)
+    
+    # Configure the input data for the agent
+    input_data = {
+        "project_description": project_description,
+        "project_path": project_path
+    }
+
+    print("Running SQLite agent")
+    print(f"- Project path: {project_path}")
+
+    # Run the agent
+    result = await sqlite_agent.run(
+        json.dumps(input_data),
+        usage_limits=usage_limits,
+        model=ai_model,
         deps=ctx.deps
     )
+    
+    print("SQLite agent run completed")
+    print(f"SQLite agent result: {result}")
+
 
     if result.success:
         files_created = "\n- " + "\n- ".join(result.created_files)
