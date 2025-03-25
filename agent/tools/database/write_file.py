@@ -3,35 +3,40 @@ from pydantic_ai import RunContext, Tool
 from typing import Dict, Any
 import os
 
+class WriteFileInput(BaseModel):
+    file_path: str
+    content: str
 
-async def write_file(ctx: RunContext, file_path: str, content: str) -> str:
-    """
-    Write content to a file in the project.
+class WriteFileOutput(BaseModel):
+    success: bool
+    message: str
+
+def _write_file(ctx: RunContext, input: WriteFileInput) -> WriteFileOutput:
+    path = input.file_path
+    if path.startswith("/"):
+        path = path[1:]
     
-    Args:
-        file_path: Path where the file should be written
-        content: Content to write to the file
-        
-    Returns:
-        Success message or error
-    """
-    print(f"Writing file: {file_path}")
+    # Check if the path is within allowed directories
+    if path.startswith("api/") or path.startswith("pages/api/"):
+        actual_path = os.path.join(ctx.deps.project_path, "pages", path.replace("pages/", ""))
+    elif path.startswith("db/"):
+        actual_path = os.path.join(ctx.deps.project_path, path)
+    else:
+        return WriteFileOutput(
+            success=False, 
+            message=f"Access denied: Database agent can only write to api/ or db/ paths"
+        )
     
     try:
         # Create directory if it doesn't exist
-        directory = os.path.dirname(file_path)
-        if directory and not os.path.exists(directory):
-            os.makedirs(directory, exist_ok=True)
-            
-        # Actually write the file
-        with open(file_path, 'w', encoding='utf-8') as f:
-            f.write(content)
-            
-        print(f"File written successfully: {file_path}")
-        return f"File {file_path} created successfully"
-    except Exception as e:
-        print(f"Failed to write file: {str(e)}")
-        return f"Error writing file: {str(e)}"
+        os.makedirs(os.path.dirname(actual_path), exist_ok=True)
         
+        # Write the file
+        with open(actual_path, "w", encoding="utf-8") as f:
+            f.write(input.content)
+        
+        return WriteFileOutput(success=True, message=f"File {input.file_path} written successfully")
+    except Exception as e:
+        return WriteFileOutput(success=False, message=f"Error writing file: {str(e)}")
 
-write_file = Tool(write_file)
+write_file = Tool(_write_file)

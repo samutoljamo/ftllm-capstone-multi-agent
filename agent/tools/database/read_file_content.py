@@ -1,24 +1,38 @@
 from pydantic import BaseModel
 from pydantic_ai import RunContext, Tool
-from typing import Dict, Any
-from agents.context import SQLiteConfigInput
+import os
+from typing import Optional
 
 
-async def read_file_content(ctx: RunContext, file_path: str) -> str:
-    print(f"Reading file content: {file_path}")
-    """
-    Read the content of a file in the project.
+class ReadFileInput(BaseModel):
+    file_path: str  # Path relative to project root or predefined directories
+
+class ReadFileOutput(BaseModel):
+    content: str
+    error: Optional[str] = None
+
+def _read_file(ctx: RunContext, input: ReadFileInput) -> ReadFileOutput:
+    # Handle paths that might come in different formats
+    path = input.file_path
+    if path.startswith("/"):
+        path = path[1:]
     
-    Args:
-        file_path: Path to the file to read
-        
-    Returns:
-        Content of the file, or empty string if not found/provided
-    """
+    # Determine if this is a special path that needs mapping
+    if path.startswith("api/"):
+        actual_path = os.path.join(ctx.deps.project_path, "pages", path)
+    elif path.startswith("db/"):
+        actual_path = os.path.join(ctx.deps.project_path, path)
+    else:
+        return ReadFileOutput(
+            content="", 
+            error=f"Access denied: Database agent can only read from api/ or db/ paths"
+        )
+    
+    try:
+        with open(actual_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        return ReadFileOutput(content=content)
+    except FileNotFoundError:
+        return ReadFileOutput(content="")
 
-    if ctx.deps.file_contents and file_path in ctx.deps.file_contents:
-        return ctx.deps.file_contents[file_path]
-    return ""
-
-
-read_file_content = Tool(read_file_content)
+read_file = Tool(_read_file)
