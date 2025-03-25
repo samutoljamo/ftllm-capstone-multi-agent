@@ -14,9 +14,9 @@ code_generation = Agent(
         "the specified application. Ensure the code follows Next.js conventions and uses Tailwind CSS for styling. "
         
         "IMPORTANT DATABASE INSTRUCTIONS: "
-        "When the application requires data persistence, you MUST use the generate_sqlite_database tool by passing instructions on how to design or improve the database. If you get feedback from the feedback agent about the database, you can give condensed instructions to the database agent. "
-        "Always call this tool EARLY in the development process when you identify data storage needs. "
-        "This specialized AI agent will generate all necessary database schema, connection utilities, and API routes. "
+        "When the application requires data persistence, you MUST use the generate_sqlite_database tool by passing instructions on how to design or improve the database. "
+        "If you get feedback from the feedback agent about the database, you can give condensed instructions to the database agent. "
+        "This specialized AI database agent will generate all necessary database schema, connection utilities, and API routes. "
         "After calling this tool, you should then write page code that imports and utilizes these database utilities. "
         
         "If feedback is provided, incorporate it to improve the code. Use the read_page and write_page tools to "
