@@ -11,7 +11,7 @@ class WriteFileOutput(BaseModel):
     success: bool
     message: str
 
-def _write_file(ctx: RunContext, input: WriteFileInput) -> WriteFileOutput:
+def write_file(ctx: RunContext, input: WriteFileInput) -> WriteFileOutput:
     path = input.file_path
     if path.startswith("/"):
         path = path[1:]
@@ -39,4 +39,4 @@ def _write_file(ctx: RunContext, input: WriteFileInput) -> WriteFileOutput:
     except Exception as e:
         return WriteFileOutput(success=False, message=f"Error writing file: {str(e)}")
 
-write_file = Tool(_write_file)
+write_file = Tool(write_file)
