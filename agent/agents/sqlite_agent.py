@@ -9,7 +9,7 @@ from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.providers.openai import OpenAIProvider
 from dotenv import load_dotenv; load_dotenv()
 
-from .context import SQLiteConfigOutput
+from .context import SQLiteConfigInput, SQLiteConfigOutput
 
 from tools.database.list_available_files import list_available_files
 from tools.database.read_file_content import read_file_content
@@ -21,17 +21,12 @@ from tools.database.create_directory import create_directory
 # SQLite Agent Definition
 # =======================
 
-def create_sqlite_agent(ai_model):
+def create_sqlite_agent():
     """Creates an agent specialized in designing and implementing SQLite databases for Next.js"""
-    
+
     sqlite_agent = Agent(
+        deps_type=SQLiteConfigInput,
         result_type=SQLiteConfigOutput,
-        tools=[
-            list_available_files,
-            read_file_content,
-            write_file,
-            create_directory
-        ],
         system_prompt = (
         "You are an expert in designing and implementing SQLite databases for Next.js applications. "
         "Based on an application description and optional existing files, you will create an appropriate "
@@ -79,7 +74,14 @@ def create_sqlite_agent(ai_model):
         
         "You may be provided information about existing files to help align your database design "
         "with the application structure and requirements."
-)
+        ),
+
+        tools=[
+            list_available_files,
+            read_file_content,
+            write_file,
+            create_directory
+        ],
     )
     
     return sqlite_agent

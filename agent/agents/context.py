@@ -26,16 +26,15 @@ class FeedbackOutput(BaseModel):
 # =======================
 # Data Models for SQLite Agent
 # =======================
-
 class SQLiteConfigInput(BaseModel):
     """Input configuration for SQLite agent"""
-    app_description: str  # Description of the app to create a database for
-    existing_files: Optional[List[str]] = None  # List of existing file paths to analyze
-    file_contents: Optional[Dict[str, str]] = None  # Contents of files to analyze
+    project_description: str  # Description of the app to create a database for
     include_auth: bool = True
     include_session: bool = True
     database_name: str = "app.db"
-    path_templates: Optional[Dict[str, str]] = None  # Templates for standard file paths
+    ai_model_name: str 
+
+
 
 class SQLiteConfigOutput(BaseModel):
     """Output from SQLite agent"""

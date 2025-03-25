@@ -11,7 +11,7 @@ class ReadFileOutput(BaseModel):
     content: str
     error: Optional[str] = None
 
-def _read_file(ctx: RunContext, input: ReadFileInput) -> ReadFileOutput:
+def read_file_content (ctx: RunContext, input: ReadFileInput) -> ReadFileOutput:
     # Handle paths that might come in different formats
     path = input.file_path
     if path.startswith("/"):
@@ -35,4 +35,4 @@ def _read_file(ctx: RunContext, input: ReadFileInput) -> ReadFileOutput:
     except FileNotFoundError:
         return ReadFileOutput(content="")
 
-read_file = Tool(_read_file)
+read_file_content = Tool(read_file_content)

@@ -45,7 +45,7 @@ async def generate_sqlite_database(
     print(f"Using AI model: {ai_model.model_name}")
     
     # Run the SQLite agent
-    sqlite_agent = create_sqlite_agent(ai_model)
+    sqlite_agent = create_sqlite_agent()
     
     result = await run_sqlite_agent_and_implement(
         sqlite_agent=sqlite_agent,
@@ -54,7 +54,8 @@ async def generate_sqlite_database(
         include_session=include_session,
         database_name=database_name,
         project_path=project_path,
-        ai_model=ai_model
+        ai_model=ai_model,
+        deps=ctx.deps
     )
 
     if result.success:

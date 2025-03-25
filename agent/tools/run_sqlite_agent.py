@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 from pydantic_ai import RunContext, Tool, Agent
 from pydantic_ai.usage import UsageLimits
-from agents.context import SQLiteConfigOutput
+from agents.context import SQLiteConfigOutput, SQLiteConfigInput
 from typing import Optional, Dict, Any
 from pydantic_ai.models.openai import OpenAIModel
 import json
@@ -15,6 +15,7 @@ async def run_sqlite_agent_and_implement(
     project_path: Optional[str] = None,
     usage_limits: Optional[UsageLimits] = None,
     ai_model: Optional[OpenAIModel] = None,
+    deps: Optional[SQLiteConfigInput] = None
 ) -> SQLiteConfigOutput:
     """
     Runs the SQLite agent and implements its file outputs in the project.
@@ -74,21 +75,36 @@ async def run_sqlite_agent_and_implement(
         result = await sqlite_agent.run(
             json.dumps(input_data),
             usage_limits=usage_limits,
-            model=ai_model
+            model=ai_model,
+            deps=deps
         )
         
         print("SQLite agent run completed")
         
-        if not result.success:
-            error_msg = getattr(result, 'error_message', 'Unknown error')
-            print(f"SQLite agent failed: {error_msg}")
+        # Check result type and handle accordingly
+        if hasattr(result, 'data') and result.data is not None:
+            # The pydantic-ai agent returns a wrapper object with a data attribute
+            return result.data
+        elif isinstance(result, SQLiteConfigOutput):
+            # The agent directly returned a SQLiteConfigOutput
+            return result
+        elif hasattr(result, 'error_message') and result.error_message:
+            # The agent returned an error
+            print(f"SQLite agent failed: {result.error_message}")
             return SQLiteConfigOutput(
                 success=False,
-                message=f"SQLite agent failed: {error_msg}",
+                message=f"SQLite agent failed: {result.error_message}",
                 created_files=[]
             )
-            
-        return result
+        else:
+            # Fallback case for unknown result type
+            error_msg = "Unknown result format from SQLite agent"
+            print(error_msg)
+            return SQLiteConfigOutput(
+                success=False,
+                message=error_msg,
+                created_files=[]
+            )
         
     except Exception as e:
         import traceback
