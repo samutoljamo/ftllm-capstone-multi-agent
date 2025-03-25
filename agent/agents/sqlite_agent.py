@@ -59,6 +59,7 @@ def create_sqlite_agent():
         "  - You can specify paths either as 'pages/api/users.js' or as 'api/users.js'\n"
         "  - API routes are server-side endpoints, not frontend pages\n"
         "  - API routes must import database utilities using relative paths (e.g., '../../db/connection.js')\n\n"
+        "  - API routes should be well documented with addtional comments so that the api can be called based on the comments and the output of the api route.\n"
         
         "FILE ACCESS RESTRICTIONS:\n"
         "- You can only read and write files in the 'db/' and 'pages/api/' directories\n"

@@ -76,7 +76,7 @@ async def generate_sqlite_database(
 
     if result.data.success:
         files_created = "\n- " + "\n- ".join(result.data.created_files)
-        return f"SQLite database generated successfully. Created files: {files_created}"
+        return f"SQLite database generated successfully. Created files: {files_created} \n\n{result.data.api_documentation}"
     else:
         return f"Failed to generate SQLite database: {result.data.message}"
 
