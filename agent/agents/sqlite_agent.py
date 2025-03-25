@@ -47,9 +47,12 @@ def create_sqlite_agent():
         "- DATABASE FILES:\n"
         "  - All database-related files must be placed within the 'db/' directory\n"
         "  - Place database schema in 'db/schema.sql'\n"
+        "  - Place database sample data in 'db/sample_data.sql'\n"
+        "  - Place a reset js script in 'db/reset.js' that resets the database to the sample data\n"
         "  - Place database connection code in 'db/connection.js'\n"
         "  - Place database queries in 'db/queries.js'\n"
         "  - You may create additional subdirectories within 'db/' as needed\n\n"
+        "  - ALWAYS USE CONNECTION.JS TO CONNECT TO THE DATABASE\n"
         
         "- API ROUTES:\n"
         "  - All API routes must be placed in 'pages/api/' or 'api/' (both refer to the same location)\n"
@@ -74,6 +77,8 @@ def create_sqlite_agent():
         
         "You may be provided information about existing files to help align your database design "
         "with the application structure and requirements."
+
+        "ALWAYS USE COMMONJS"
         ),
 
         tools=[

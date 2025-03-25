@@ -32,13 +32,15 @@ def create_base_nextjs_project(project_path: str) -> None:
                 "build": "next build",
                 "start": "next start",
                 "cypress": "cypress open",
-                "cypress:run": "cypress run"
+                "cypress:run": "cypress run",
+                "reset-db": "node db/reset.js"
             },
             "dependencies": {
                 "next": "^12.0.0",
                 "react": "^17.0.2",
                 "react-dom": "^17.0.2",
-                "tailwindcss": "^3.0.0"
+                "tailwindcss": "^3.0.0",
+                "sqlite3": "^5.1.7"
             },
             "devDependencies": {
                 "cypress": "^14.2.0",
