@@ -23,6 +23,12 @@ code_generation = Agent(
         "interact with the project files and the list_all_pages tool to see what pages exist already. "
         "The path is relative to <project_root>/pages, do NOT USE a leading slash. "
         "Note: You cannot create shared code or apis, only pages."
+        "Note: You cannot use other npm packages, only the ones that are already installed, which are: "
+        "  - sqlite3"
+        "  - next"
+        "  - react"
+        "  - react-dom"
+        "  - react-router-dom"
     )
 )
 

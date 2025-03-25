@@ -79,7 +79,13 @@ def create_sqlite_agent():
         "You may be provided information about existing files to help align your database design "
         "with the application structure and requirements."
 
-        "ALWAYS USE COMMONJS"
+        "ALWAYS USE COMMONJS"        
+        "Note: You cannot use other npm packages, only the ones that are already installed, which are: "
+        "  - sqlite3"
+        "  - next"
+        "  - react"
+        "  - react-dom"
+        "  - react-router-dom"
         ),
 
         tools=[
