@@ -106,8 +106,8 @@ The backend API will be available at `http://localhost:8000`
 .
 ├── app/                 # Frontend React application
 ├── backend/            # FastAPI backend service
-└── agent/             # AI agent system
-    ├── agents/        # Agent implementations
-    ├── tools/         # Agent tools and utilities
-    └── utils/         # Helper utilities
+    └── agent/             # AI agent system
+        ├── agents/        # Agent implementations
+        ├── tools/         # Agent tools and utilities
+        └── utils/         # Helper utilities
 ```
