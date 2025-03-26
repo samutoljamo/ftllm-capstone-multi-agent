@@ -11,7 +11,7 @@ class WritePageOutput(BaseModel):
     success: bool
     message: Optional[str] = None
 
-def _write_page(ctx: RunContext, input: WritePageInput) -> WritePageOutput:
+async def _write_page(ctx: RunContext, input: WritePageInput) -> WritePageOutput:
     if(input.url.startswith("/")):
         input.url = input.url[1:]
     print(f"Writing page to {input.url}")

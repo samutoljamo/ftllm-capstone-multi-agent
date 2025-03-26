@@ -6,7 +6,7 @@ from .tool_notifier import tool_notifier
 class ListPagesOutput(BaseModel):
     pages: List[str]  # List of virtual URLs
 
-def _list_all_pages(ctx: RunContext) -> ListPagesOutput:
+async def _list_all_pages(ctx: RunContext) -> ListPagesOutput:
     print("List all pages called")
     project_path = ctx.deps.project_path
     

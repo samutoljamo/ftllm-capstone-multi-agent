@@ -65,7 +65,9 @@ const ToolCall = ({
         <div className="flex-1">
           <div className="text-sm font-medium">{tool.name}</div>
           {tool.details && !tool.isExpanded && (
-            <div className="text-xs text-gray-500 truncate">{tool.details}</div>
+            <div className="text-xs text-gray-500 truncate">
+              {tool.details.length > 30 ? `${tool.details.slice(0, 30)}...` : tool.details}
+            </div>
           )}
         </div>
         <div className="flex items-center space-x-2">
@@ -306,13 +308,13 @@ const ProjectStatus = ({
 };
 
 function App() {
-  const [projectName, setProjectName] = useState("");
   const [description, setDescription] = useState("");
   const [messages, setMessages] = useState<string[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [projectDetails, setProjectDetails] = useState<{
     project_id: string;
     directory: string;
+    description: string;
   } | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
@@ -326,6 +328,7 @@ function App() {
   const connectWebSocket = (projectData: {
     project_id: string;
     directory: string;
+    description: string;
   }) => {
     const ws = new WebSocket("ws://localhost:8000/ws");
 
@@ -339,7 +342,11 @@ function App() {
         overallProgress: 0,
       });
       // Send project details to the WebSocket
-      ws.send(JSON.stringify(projectData));
+      ws.send(JSON.stringify({
+        project_id: projectData.project_id,
+        directory: projectData.directory,
+        description: projectData.description
+      }));
     };
 
     ws.onmessage = (event) => {
@@ -450,7 +457,7 @@ function App() {
   };
 
   const startProjectGeneration = async () => {
-    if (!projectName.trim() || !description.trim()) return;
+    if (!description.trim()) return;
 
     try {
       const response = await fetch("http://localhost:8000/start-project", {
@@ -459,7 +466,6 @@ function App() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          project_name: projectName,
           description: description,
         }),
       });
@@ -475,7 +481,6 @@ function App() {
   };
 
   const resetState = () => {
-    setProjectName("");
     setDescription("");
     setIsConnected(false);
     setProjectDetails(null);
@@ -554,27 +559,10 @@ function App() {
             <div className="divide-y divide-gray-200">
               <div className="py-8 text-base leading-6 space-y-4 text-gray-700 sm:text-lg sm:leading-7">
                 <h1 className="text-3xl font-bold text-center mb-8 text-gray-900">
-                  Multi-Agent Next.jsProject Generator
+                  Multi-Agent Next.js Project Generator
                 </h1>
 
                 <div className="space-y-4">
-                  <div>
-                    <label
-                      htmlFor="projectName"
-                      className="block text-sm font-medium text-gray-700"
-                    >
-                      Project Name
-                    </label>
-                    <input
-                      type="text"
-                      id="projectName"
-                      value={projectName}
-                      onChange={(e) => setProjectName(e.target.value)}
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                      placeholder="Enter project name..."
-                    />
-                  </div>
-
                   <div>
                     <label
                       htmlFor="description"
@@ -595,11 +583,7 @@ function App() {
                   <div className="flex space-x-4">
                     <button
                       onClick={startProjectGeneration}
-                      disabled={
-                        !projectName.trim() ||
-                        !description.trim() ||
-                        isConnected
-                      }
+                      disabled={!description.trim() || isConnected}
                       className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
                     >
                       {isConnected

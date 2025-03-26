@@ -122,7 +122,7 @@ async def get_feedback(test_output: str, test_errors: List[str], server_output: 
     
     return result.data
 
-async def full_development_flow(project_description: str, max_iterations: int = 5, notifier=None):
+async def full_development_flow(project_description: str, max_iterations: int = 5, notifier=None, project_directory: str = None):
     """
     Orchestrates the development process using direct sequential agent invocation with tools.
     
@@ -130,6 +130,7 @@ async def full_development_flow(project_description: str, max_iterations: int = 
         project_description: Description of the project to build
         max_iterations: Maximum number of development iterations
         notifier: Optional WebSocketNotifier for sending updates
+        project_directory: Directory where the project should be created (if None, uses default)
     
     Returns:
         Dictionary with development results
@@ -137,7 +138,7 @@ async def full_development_flow(project_description: str, max_iterations: int = 
     print("Starting development process...")
     
     # Step 1: Create base project structure
-    project_path = os.path.join(os.getcwd(), "nextjs-project")
+    project_path = project_directory if project_directory else os.path.join(os.getcwd(), "nextjs-project")
     create_base_nextjs_project(project_path)
     print(f"Created base Next.js project at {project_path}")
     print(project_path)

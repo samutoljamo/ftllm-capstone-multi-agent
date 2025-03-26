@@ -12,7 +12,7 @@ class ReadFileOutput(BaseModel):
     content: str
     error: Optional[str] = None
 
-def read_file_content (ctx: RunContext, input: ReadFileInput) -> ReadFileOutput:
+async def read_file_content (ctx: RunContext, input: ReadFileInput) -> ReadFileOutput:
     # Handle paths that might come in different formats
     print(f"Database agent reading file {input.file_path}")
 
@@ -41,4 +41,4 @@ def read_file_content (ctx: RunContext, input: ReadFileInput) -> ReadFileOutput:
     except FileNotFoundError:
         return ReadFileOutput(content="")
 
-read_file_content = Tool(read_file_content)
+read_file_content = Tool(tool_notifier(read_file_content))
