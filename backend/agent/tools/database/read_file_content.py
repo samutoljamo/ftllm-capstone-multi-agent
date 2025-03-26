@@ -2,6 +2,7 @@ from pydantic import BaseModel
 from pydantic_ai import RunContext, Tool
 import os
 from typing import Optional
+from ..tool_notifier import tool_notifier
 
 
 class ReadFileInput(BaseModel):

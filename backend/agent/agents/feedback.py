@@ -1,9 +1,8 @@
-from pydantic import BaseModel
 from pydantic_ai import Agent
 from .context import CodeGenerationDeps, FeedbackOutput
-from tools.cypress_tests import read_cypress_tests
-from tools.list_pages import list_all_pages
-from tools.read_page import read_page
+from agent.tools.cypress_tests import read_cypress_tests
+from agent.tools.list_pages import list_all_pages
+from agent.tools.read_page import read_page
 
 # Define the feedback agent directly without a creation function
 feedback = Agent(

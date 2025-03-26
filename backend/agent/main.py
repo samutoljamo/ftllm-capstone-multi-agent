@@ -1,26 +1,22 @@
-import subprocess
 import os
-from pydantic import BaseModel
 from typing import List, Dict, Optional, Literal, Any
 import json
 import asyncio
-from pydantic_ai import Agent, RunContext
 from pydantic_ai.usage import UsageLimits, Usage
 from pydantic_ai.models.openai import OpenAIModel
-from dotenv import load_dotenv; load_dotenv()
 
 # Import our utility functions
-from utils.nextjs_project import create_base_nextjs_project
-from utils.cypress_runner import run_cypress_tests
+from agent.utils.nextjs_project import create_base_nextjs_project
+from agent.utils.cypress_runner import run_cypress_tests
 
 # Import agents
-from agents import code_generation, cypress_tests, feedback
-from agents.context import CodeGenerationDeps, FeedbackOutput
+from agent.agents import code_generation, cypress_tests, feedback
+from agent.agents.context import CodeGenerationDeps, FeedbackOutput
 
 
 # =======================
 # Define AI Model and Usage Limits
-# =======================x
+# =======================
 
 # Define a common usage limit for all agents
 DEFAULT_USAGE_LIMITS = UsageLimits(request_limit=100, total_tokens_limit=1000000)
@@ -34,9 +30,17 @@ ai_model = OpenAIModel(
 # Simplified development flow with direct agent invocation using the tools
 # =======================
 
-async def generate_code_with_tools(project_description: str, project_path: str, deps: CodeGenerationDeps, feedback: Optional[str] = None) -> None:
+async def generate_code_with_tools(project_description: str, project_path: str, deps: CodeGenerationDeps, feedback: Optional[str] = None, notifier=None) -> None:
     """Generate code for the Next.js application using the code generation agent with tools"""
     print("Generating code...")
+    
+    agent_id = None
+    if notifier:
+        agent_id = await notifier.notify_agent_start("Code Generation Agent")
+        # Update deps to include agent name and id
+        deps.agent_name = "Code Generation Agent"
+        deps.agent_id = agent_id
+        deps.notifier = notifier
     
     # Prepare input for the code generation agent
     input_data = {
@@ -52,14 +56,23 @@ async def generate_code_with_tools(project_description: str, project_path: str, 
         model=ai_model,
         deps=deps
     )
-    print("code generation agent " )
-    print(code_generation)
     
-    print(f"Code generation completed, files written to project")
+    if notifier and agent_id:
+        await notifier.notify_agent_complete(agent_id, "Code Generation Agent")
+    
+    print("Code generation completed, files written to project")
 
-async def generate_cypress_tests_with_tools(project_path: str, deps: CodeGenerationDeps) -> None:
+async def generate_cypress_tests_with_tools(project_path: str, deps: CodeGenerationDeps, notifier=None) -> None:
     """Generate Cypress tests for the application using the cypress tests agent with tools"""
     print("Generating Cypress tests...")
+    
+    agent_id = None
+    if notifier:
+        agent_id = await notifier.notify_agent_start("Cypress Tests Agent")
+        # Update deps to include agent name and id
+        deps.agent_name = "Cypress Tests Agent"
+        deps.agent_id = agent_id
+        deps.notifier = notifier
     
     # Call cypress tests agent - it will use tools to read pages and write tests
     await cypress_tests.run(
@@ -72,11 +85,22 @@ async def generate_cypress_tests_with_tools(project_path: str, deps: CodeGenerat
         deps=deps
     )
     
+    if notifier and agent_id:
+        await notifier.notify_agent_complete(agent_id, "Cypress Tests Agent")
+    
     print("Cypress tests generation completed")
 
-async def get_feedback(test_output: str, test_errors: List[str], server_output: Dict[str, str], deps: CodeGenerationDeps) -> FeedbackOutput:
+async def get_feedback(test_output: str, test_errors: List[str], server_output: Dict[str, str], deps: CodeGenerationDeps, notifier=None) -> FeedbackOutput:
     """Get feedback based on test results"""
     print("Getting feedback on test results...")
+    
+    agent_id = None
+    if notifier:
+        agent_id = await notifier.notify_agent_start("Feedback Agent")
+        # Update deps to include agent name and id
+        deps.agent_name = "Feedback Agent"
+        deps.agent_id = agent_id
+        deps.notifier = notifier
     
     # Prepare input for the feedback agent
     input_data = {
@@ -93,15 +117,19 @@ async def get_feedback(test_output: str, test_errors: List[str], server_output: 
         deps=deps
     )
     
+    if notifier and agent_id:
+        await notifier.notify_agent_complete(agent_id, "Feedback Agent")
+    
     return result.data
 
-async def full_development_flow(project_description: str, max_iterations: int = 5):
+async def full_development_flow(project_description: str, max_iterations: int = 5, notifier=None):
     """
     Orchestrates the development process using direct sequential agent invocation with tools.
     
     Args:
         project_description: Description of the project to build
         max_iterations: Maximum number of development iterations
+        notifier: Optional WebSocketNotifier for sending updates
     
     Returns:
         Dictionary with development results
@@ -116,14 +144,26 @@ async def full_development_flow(project_description: str, max_iterations: int = 
     
     # Create a usage tracker for token usage
     usage = Usage()
-
     
     # Store development artifacts
     feedback_result = None
     
     # Main development loop
     for iteration in range(1, max_iterations + 1):
-        deps = CodeGenerationDeps(project_path=project_path, project_description=project_description, ai_model_name=ai_model.model_name, feedback_message=feedback_result.feedback_message if feedback_result else None)
+        # If notifier exists, start new iteration
+        if notifier:
+            await notifier.start_iteration(iteration)
+        
+        deps = CodeGenerationDeps(
+            project_path=project_path, 
+            project_description=project_description, 
+            ai_model_name=ai_model.model_name, 
+            feedback_message=feedback_result.feedback_message if feedback_result else None,
+            agent_name=None,  # Will be set in each agent function
+            agent_id=None,    # Will be set in each agent function
+            notifier=notifier  # Pass notifier in deps for tool calls
+        )
+        
         print(f"\n--- Iteration {iteration}/{max_iterations} ---")
         
         # Step 2: Generate or update code based on feedback
@@ -131,12 +171,13 @@ async def full_development_flow(project_description: str, max_iterations: int = 
             project_description,
             project_path,
             deps,
-            feedback_result.feedback_message if feedback_result else None
+            feedback_result.feedback_message if feedback_result else None,
+            notifier
         )
         print(f"Generated code in iteration {iteration}")
         
         # Step 3: Generate Cypress tests
-        await generate_cypress_tests_with_tools(project_path, deps)
+        await generate_cypress_tests_with_tools(project_path, deps, notifier)
         print("Generated Cypress tests")
         
         # Step 4: Run tests with enhanced functionality that:
@@ -150,6 +191,9 @@ async def full_development_flow(project_description: str, max_iterations: int = 
         # If tests pass, we're done
         if test_result['success']:
             print("Tests passed successfully!")
+            # Complete iteration if notifier exists
+            if notifier:
+                await notifier.complete_iteration()
             break
         
         # If tests fail, get feedback for next iteration
@@ -157,9 +201,14 @@ async def full_development_flow(project_description: str, max_iterations: int = 
             test_result['output'], 
             test_result['errors'], 
             test_result.get('server_output', {}),  # Pass server output to feedback agent
-            deps
+            deps,
+            notifier
         )
         print(f"Feedback: {feedback_result.feedback_message}")
+        
+        # Complete iteration if notifier exists
+        if notifier:
+            await notifier.complete_iteration()
         
         # If this was the last iteration, we're done even if tests failed
         if iteration == max_iterations:

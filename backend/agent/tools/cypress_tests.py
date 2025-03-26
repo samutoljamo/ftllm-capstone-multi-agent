@@ -2,6 +2,7 @@ from pydantic import BaseModel
 from pydantic_ai import RunContext, Tool
 from typing import Optional
 import os
+from .tool_notifier import tool_notifier
 
 class WriteCypressTestsInput(BaseModel):
     content: str
@@ -45,5 +46,5 @@ def _read_cypress_tests(ctx: RunContext) -> ReadCypressTestsOutput:
         return ReadCypressTestsOutput(content="")
 
 # Export the tools
-write_cypress_tests = Tool(_write_cypress_tests)
-read_cypress_tests = Tool(_read_cypress_tests)
+write_cypress_tests = Tool(tool_notifier(_write_cypress_tests))
+read_cypress_tests = Tool(tool_notifier(_read_cypress_tests))

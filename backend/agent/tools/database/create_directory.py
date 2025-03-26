@@ -2,6 +2,7 @@ from pydantic import BaseModel
 from pydantic_ai import RunContext, Tool
 from typing import Dict, Any, Optional
 import os
+from ..tool_notifier import tool_notifier
 
 class CreateDirectoryInput(BaseModel):
     directory_path: str  # Path to the directory to create

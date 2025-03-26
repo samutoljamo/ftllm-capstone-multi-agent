@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from pydantic_ai import RunContext, Tool
 import os
+from .tool_notifier import tool_notifier
 
 class ReadPageInput(BaseModel):
     url: str  # Virtual URL, e.g., "/index.js"
@@ -25,5 +26,5 @@ def _read_page(ctx: RunContext, input: ReadPageInput) -> ReadPageOutput:
     except FileNotFoundError:
         return ReadPageOutput(content="")
     
-read_page = Tool(_read_page)
+read_page = Tool(tool_notifier(_read_page))
 

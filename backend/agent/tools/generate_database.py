@@ -1,11 +1,11 @@
-from pydantic import BaseModel
 from pydantic_ai import RunContext, Tool
 import os
 from typing import Dict, Any
-from agents.sqlite_agent import create_sqlite_agent
+from agent.agents.sqlite_agent import create_sqlite_agent
 from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.usage import UsageLimits
 import json
+from .tool_notifier import tool_notifier
 
 
 async def generate_sqlite_database(
@@ -87,4 +87,4 @@ async def generate_sqlite_database(
 
 
 # Create the Tool instance for this function
-generate_sqlite_database_tool = Tool(generate_sqlite_database)
+generate_sqlite_database_tool = Tool(tool_notifier(generate_sqlite_database))

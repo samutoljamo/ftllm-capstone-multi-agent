@@ -2,7 +2,7 @@ from pydantic import BaseModel
 from pydantic_ai import RunContext, Tool
 from typing import Optional
 import os
-
+from .tool_notifier import tool_notifier
 class WritePageInput(BaseModel):
     url: str    # Virtual URL
     content: str
@@ -21,5 +21,5 @@ def _write_page(ctx: RunContext, input: WritePageInput) -> WritePageOutput:
         f.write(input.content)
     return WritePageOutput(success=True, message=f"Page written successfully to {input.url}")
     
-write_page = Tool(_write_page)
+write_page = Tool(tool_notifier(_write_page))
 

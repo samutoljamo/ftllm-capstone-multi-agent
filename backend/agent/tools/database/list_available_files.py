@@ -2,6 +2,7 @@ from pydantic import BaseModel
 from pydantic_ai import RunContext, Tool
 from typing import List, Dict, Any
 import os
+from ..tool_notifier import tool_notifier
 
 async def list_available_files(ctx: RunContext) -> List[str]:
     print("Listing available database and API files...")
@@ -48,4 +49,4 @@ async def list_available_files(ctx: RunContext) -> List[str]:
     print(f"Database agent found {len(files)} files: {files}")
     return files
 
-list_available_files = Tool(list_available_files)
+list_available_files = Tool(tool_notifier(list_available_files))

@@ -2,7 +2,7 @@ from pydantic import BaseModel
 from pydantic_ai import RunContext, Tool
 from typing import List
 import os
-
+from .tool_notifier import tool_notifier
 class ListPagesOutput(BaseModel):
     pages: List[str]  # List of virtual URLs
 
@@ -24,4 +24,4 @@ def _list_all_pages(ctx: RunContext) -> ListPagesOutput:
     print(pages)
     return ListPagesOutput(pages=pages)
 
-list_all_pages = Tool(_list_all_pages)
+list_all_pages = Tool(tool_notifier(_list_all_pages))
