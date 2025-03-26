@@ -29,19 +29,25 @@ def install_packages(project_path: str) -> Dict[str, Any]:
         )
 
         # Run the reset-db script
-        subprocess.run(
+        reset_result = subprocess.run(
             ["npm", "run", "reset-db"],
             cwd=project_path,
             capture_output=True,
             text=True
         )
         
-        success = result.returncode == 0
+        success = result.returncode == 0 and reset_result.returncode == 0
         
+        errors = []
+        if result.stderr:
+            errors.append(result.stderr)
+        if reset_result.stderr:
+            errors.append(reset_result.stderr)
+            
         return {
             "success": success,
-            "output": result.stdout,
-            "errors": [result.stderr] if result.stderr else []
+            "output": result.stdout + "\n\n--- Reset DB Output ---\n" + reset_result.stdout,
+            "errors": errors
         }
     except subprocess.TimeoutExpired:
         return {

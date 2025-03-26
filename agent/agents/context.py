@@ -7,6 +7,7 @@ class CodeGenerationDeps(BaseModel):
     feedback: Optional[str] = None
     project_path: str
     ai_model_name: str
+    feedback_message: Optional[str] = None
 
 class CypressTestsDeps(BaseModel):  
     project_path: str
@@ -19,7 +20,6 @@ class FeedbackDeps(BaseModel):
 
 class FeedbackOutput(BaseModel):
     feedback_message: str
-    suggestions: Optional[List[str]] = None
 
 
 
@@ -33,5 +33,4 @@ class SQLiteConfigOutput(BaseModel):
     """Output from SQLite agent"""
     success: bool  # Whether the operation was successful
     message: str  # Success or error message
-    created_files: List[str]  # List of files created
     api_documentation: str # Documentation for the API routes
