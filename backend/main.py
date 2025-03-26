@@ -193,7 +193,7 @@ async def run_project_generation(websocket: WebSocket, project_data: dict):
         # Run the development flow with the notifier
         result = await full_development_flow(
             project_description=description,
-            max_iterations=3,
+            max_iterations=5,
             notifier=notifier,
             project_directory=directory  # Pass the directory to use
         )

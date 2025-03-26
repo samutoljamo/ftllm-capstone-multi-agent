@@ -218,7 +218,7 @@ const IterationStatus = ({
           </div>
         </div>
         <div className="flex items-center space-x-4">
-          <span className="text-sm text-gray-500">{iteration.progress}%</span>
+          <span className="text-sm text-gray-500 invisible">{iteration.progress}%</span>
           <svg
             className={`w-5 h-5 transform transition-transform ${
               iteration.isExpanded ? "rotate-180" : ""
@@ -286,7 +286,7 @@ const ProjectStatus = ({
                 : "bg-gray-300"
             }`}
           />
-          <span className="text-sm text-gray-600">
+          <span className="text-sm text-gray-600 invisible">
             {status.overallProgress}%
           </span>
         </div>
