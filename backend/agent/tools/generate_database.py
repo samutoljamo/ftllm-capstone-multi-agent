@@ -8,7 +8,7 @@ import json
 from .tool_notifier import tool_notifier
 
 
-async def generate_sqlite_database(
+async def _generate_sqlite_database(
     ctx: RunContext[Dict[str, Any]], 
     database_generation_instructions: str = None,
     feedback: str = None
@@ -87,4 +87,4 @@ async def generate_sqlite_database(
 
 
 # Create the Tool instance for this function
-generate_sqlite_database_tool = Tool(tool_notifier(generate_sqlite_database))
+generate_sqlite_database = Tool(tool_notifier(_generate_sqlite_database))

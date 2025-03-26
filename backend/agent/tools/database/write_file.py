@@ -12,7 +12,7 @@ class WriteFileOutput(BaseModel):
     success: bool
     message: str
 
-def write_file(ctx: RunContext, input: WriteFileInput) -> WriteFileOutput:
+async def write_file(ctx: RunContext, input: WriteFileInput) -> WriteFileOutput:
     print(f"Database agent writing file {input.file_path}")
 
     path = input.file_path

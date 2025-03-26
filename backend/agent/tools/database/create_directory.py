@@ -11,7 +11,7 @@ class CreateDirectoryOutput(BaseModel):
     success: bool
     message: str
 
-def create_directory(ctx: RunContext, input: CreateDirectoryInput) -> CreateDirectoryOutput:
+async def create_directory(ctx: RunContext, input: CreateDirectoryInput) -> CreateDirectoryOutput:
     """
     Create a directory in the database or API structure.
     
@@ -68,4 +68,4 @@ def create_directory(ctx: RunContext, input: CreateDirectoryInput) -> CreateDire
         print(f"Failed to create directory: {str(e)}")
         return CreateDirectoryOutput(success=False, message=f"Error creating directory: {str(e)}")
 
-create_directory = Tool(create_directory)
+create_directory = Tool(tool_notifier(create_directory))

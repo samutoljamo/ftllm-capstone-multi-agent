@@ -9,7 +9,7 @@ class ReadPageInput(BaseModel):
 class ReadPageOutput(BaseModel):
     content: str
 
-def _read_page(ctx: RunContext, input: ReadPageInput) -> ReadPageOutput:
+async def _read_page(ctx: RunContext, input: ReadPageInput) -> ReadPageOutput:
     if(input.url.startswith("/")):
         input.url = input.url[1:]
     actual_path = os.path.join(ctx.deps.project_path, "pages", input.url)

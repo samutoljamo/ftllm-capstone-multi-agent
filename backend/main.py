@@ -25,15 +25,16 @@ app.add_middleware(
 )
 
 class ProjectRequest(BaseModel):
-    project_name: str
     description: str
 
 class ProjectResponse(BaseModel):
     project_id: str
     directory: str
+    description: str  # Add description to response
 
-# Store active WebSocket connections
-active_connections: dict[str, WebSocket] = {}
+# Store active WebSocket connections and project data
+active_connections = {}
+project_data_store = {}  # Store project data including descriptions
 
 async def send_iteration_update(
     websocket: WebSocket,
@@ -163,10 +164,8 @@ class WebSocketNotifier:
             f"{agent_name} completed"
         )
     
-    async def notify_tool_call(self, agent_id, tool_name, status, details=None):
+    async def notify_tool_call(self, agent_id, tool_id, tool_name, status, details=None):
         """Notify about a tool call"""
-        tool_id = str(uuid.uuid4())
-        
         await send_tool_call(
             self.websocket,
             self.current_iteration_id,
@@ -184,6 +183,8 @@ async def run_project_generation(websocket: WebSocket, project_data: dict):
     project_id = project_data["project_id"]
     directory = project_data["directory"]
     description = project_data.get("description", "Create a simple Next.js application")
+
+    print(f"Running project generation for {project_id} in directory {directory}, description: {description}")
     
     # Create a notifier for callbacks
     notifier = WebSocketNotifier(websocket, project_id)
@@ -193,7 +194,8 @@ async def run_project_generation(websocket: WebSocket, project_data: dict):
         result = await full_development_flow(
             project_description=description,
             max_iterations=3,
-            notifier=notifier
+            notifier=notifier,
+            project_directory=directory  # Pass the directory to use
         )
         
         # Send final message
@@ -224,7 +226,18 @@ async def start_project(request: ProjectRequest):
     # Create directory if it doesn't exist
     os.makedirs(directory, exist_ok=True)
     
-    return ProjectResponse(project_id=project_id, directory=directory)
+    # Store project data including description
+    project_data_store[project_id] = {
+        "project_id": project_id,
+        "directory": directory,
+        "description": request.description
+    }
+    
+    return ProjectResponse(
+        project_id=project_id, 
+        directory=directory,
+        description=request.description
+    )
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -234,21 +247,29 @@ async def websocket_endpoint(websocket: WebSocket):
     
     try:
         # Receive project data
-        project_data = await websocket.receive_json()
-        project_id = project_data["project_id"]
+        initial_data = await websocket.receive_json()
+        project_id = initial_data["project_id"]
+        
+        # Get stored project data including description
+        project_data = project_data_store.get(project_id)
+        if not project_data:
+            raise ValueError(f"No project data found for ID: {project_id}")
         
         # Store connection
         active_connections[project_id] = websocket
         
-        # Start actual project generation
+        # Start actual project generation with stored description
         await run_project_generation(websocket, project_data)
         
     except Exception as e:
         print(f"WebSocket error: {e}")
     finally:
-        # Clean up connection
-        if project_id and project_id in active_connections:
-            del active_connections[project_id]
+        # Clean up connection and stored data
+        if project_id:
+            if project_id in active_connections:
+                del active_connections[project_id]
+            if project_id in project_data_store:
+                del project_data_store[project_id]
         await websocket.close()
 
 if __name__ == "__main__":

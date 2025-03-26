@@ -14,7 +14,7 @@ class WriteCypressTestsOutput(BaseModel):
 class ReadCypressTestsOutput(BaseModel):
     content: str
 
-def _write_cypress_tests(ctx: RunContext, input: WriteCypressTestsInput) -> WriteCypressTestsOutput:
+async def _write_cypress_tests(ctx: RunContext, input: WriteCypressTestsInput) -> WriteCypressTestsOutput:
     print("Writing Cypress tests")
     project_path = ctx.deps.project_path
     
@@ -32,7 +32,7 @@ def _write_cypress_tests(ctx: RunContext, input: WriteCypressTestsInput) -> Writ
         message=f"Cypress tests written successfully to {test_file_path}"
     )
 
-def _read_cypress_tests(ctx: RunContext) -> ReadCypressTestsOutput:
+async def _read_cypress_tests(ctx: RunContext) -> ReadCypressTestsOutput:
     print("Reading Cypress tests")
     project_path = ctx.deps.project_path
     
