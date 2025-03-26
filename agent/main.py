@@ -95,7 +95,7 @@ async def get_feedback(test_output: str, test_errors: List[str], server_output: 
     
     return result.data
 
-async def full_development_flow(project_description: str, max_iterations: int = 3):
+async def full_development_flow(project_description: str, max_iterations: int = 5):
     """
     Orchestrates the development process using direct sequential agent invocation with tools.
     
@@ -117,13 +117,13 @@ async def full_development_flow(project_description: str, max_iterations: int = 
     # Create a usage tracker for token usage
     usage = Usage()
 
-    deps = CodeGenerationDeps(project_path=project_path, project_description=project_description, ai_model_name=ai_model.model_name)
     
     # Store development artifacts
     feedback_result = None
     
     # Main development loop
     for iteration in range(1, max_iterations + 1):
+        deps = CodeGenerationDeps(project_path=project_path, project_description=project_description, ai_model_name=ai_model.model_name, feedback_message=feedback_result.feedback_message if feedback_result else None)
         print(f"\n--- Iteration {iteration}/{max_iterations} ---")
         
         # Step 2: Generate or update code based on feedback
@@ -160,8 +160,6 @@ async def full_development_flow(project_description: str, max_iterations: int = 
             deps
         )
         print(f"Feedback: {feedback_result.feedback_message}")
-        if hasattr(feedback_result, 'suggestions'):
-            print(f"Suggestions: {feedback_result.suggestions}")
         
         # If this was the last iteration, we're done even if tests failed
         if iteration == max_iterations:

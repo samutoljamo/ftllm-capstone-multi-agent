@@ -13,6 +13,12 @@ def _read_page(ctx: RunContext, input: ReadPageInput) -> ReadPageOutput:
         input.url = input.url[1:]
     actual_path = os.path.join(ctx.deps.project_path, "pages", input.url)
     try:
+        # check if the file exists
+        if not os.path.exists(actual_path):
+            return ReadPageOutput(content="PATH NOT FOUND")
+        # check if the file is a directory
+        if os.path.isdir(actual_path):
+            return ReadPageOutput(content="PATH IS A DIRECTORY")
         with open(actual_path, "r", encoding="utf-8") as f:
             content = f.read()
         return ReadPageOutput(content=content)
