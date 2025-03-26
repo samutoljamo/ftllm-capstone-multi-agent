@@ -2,6 +2,7 @@ from pydantic import BaseModel
 from pydantic_ai import RunContext, Tool
 from typing import Dict, Any
 import os
+from ..tool_notifier import tool_notifier
 
 class WriteFileInput(BaseModel):
     file_path: str
@@ -42,4 +43,4 @@ def write_file(ctx: RunContext, input: WriteFileInput) -> WriteFileOutput:
     except Exception as e:
         return WriteFileOutput(success=False, message=f"Error writing file: {str(e)}")
 
-write_file = Tool(write_file)
+write_file = Tool(tool_notifier(write_file))

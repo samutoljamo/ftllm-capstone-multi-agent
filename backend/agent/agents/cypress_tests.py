@@ -1,10 +1,8 @@
 from pydantic_ai import Agent
 from .context import CodeGenerationDeps
-from tools.read_page import read_page
-from tools.list_pages import list_all_pages
-from tools.cypress_tests import read_cypress_tests, write_cypress_tests
-from tools.database.read_file_content import read_file_content
-from tools.database.list_available_files import list_available_files
+from agent.tools.read_page import read_page
+from agent.tools.list_pages import list_all_pages
+from agent.tools.cypress_tests import read_cypress_tests, write_cypress_tests
 
 # Define the cypress tests agent directly without a creation function
 cypress_tests = Agent(

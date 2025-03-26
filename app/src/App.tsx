@@ -129,8 +129,7 @@ const AgentStatus = ({
           <div>
             <h3 className="font-semibold text-lg">{agent.name}</h3>
             <p className="text-sm text-gray-500">
-              {agent.toolCalls.length} tool
-              {agent.toolCalls.length !== 1 ? "s" : ""}
+              {agent.toolCalls.length} tool{agent.toolCalls.length !== 1 ? "s" : ""}
             </p>
           </div>
         </div>
@@ -160,22 +159,14 @@ const AgentStatus = ({
             {agent.details && (
               <p className="text-sm text-gray-600 mb-4">{agent.details}</p>
             )}
-            <div className="space-y-4">
-              {/* Tool Calls */}
-              {agent.toolCalls.length > 0 && (
-                <div className="space-y-2">
-                  <h4 className="text-sm font-medium text-gray-700">
-                    Tool Calls
-                  </h4>
-                  {agent.toolCalls.map((tool) => (
-                    <ToolCall
-                      key={tool.id}
-                      tool={tool}
-                      onToggleExpand={onToggleTool}
-                    />
-                  ))}
-                </div>
-              )}
+            <div className="space-y-2">
+              {agent.toolCalls.map((tool) => (
+                <ToolCall
+                  key={tool.id}
+                  tool={tool}
+                  onToggleExpand={onToggleTool}
+                />
+              ))}
             </div>
           </div>
         </div>

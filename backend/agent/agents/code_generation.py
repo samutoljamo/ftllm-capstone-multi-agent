@@ -1,9 +1,9 @@
 from pydantic_ai import Agent
 from .context import CodeGenerationDeps
-from tools.read_page import read_page
-from tools.write_page import write_page
-from tools.list_pages import list_all_pages
-from tools.generate_database import generate_sqlite_database
+from agent.tools.read_page import read_page
+from agent.tools.write_page import write_page
+from agent.tools.list_pages import list_all_pages
+from agent.tools.generate_database import generate_sqlite_database
 
 # Define the code generation agent directly without a creation function
 code_generation = Agent(
